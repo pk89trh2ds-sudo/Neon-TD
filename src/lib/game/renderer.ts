@@ -1,4 +1,4 @@
-import { ENEMY, type CombatMods, type GridCoord, type TowerKind } from "./types";
+import { type CombatMods, type GridCoord, type TowerKind } from "./types";
 import {
   effectiveRange,
   keyOf,
