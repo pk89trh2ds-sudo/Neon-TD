@@ -13,6 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run test` — runs `scripts/**/*.test.mjs` via `node --test`, plus three TS tests (`src/lib/app-data/app-data.test.ts`, `src/lib/auth/gate-identity.test.ts`, `src/lib/game/balance.test.ts`) via `node --experimental-strip-types --test`.
   - Single `.mjs` test: `node --test scripts/<name>.test.mjs`
   - Single `.ts` test: `node --experimental-strip-types --test src/lib/game/balance.test.ts`
+- `npm run verify` — `typecheck && lint && test && build`, in that order. Run this before every push — it's the entire gate, since there is no CI (see Constraints).
 - `npm run check:auth` — verifies the auth on/off invariant (`.grok/app-env.json` vs `migrations/`).
 - `npm run db:migrate` — applies `migrations/*.sql` (non-recursive) to the configured Postgres. Skips gracefully (does not fail the build) when the DB is unreachable at build time.
 - `node scripts/balance-sim.ts` (run via `npx tsx` or `node --experimental-strip-types`) — headless combat-sim harness for iterating difficulty numbers without a browser. See "Balance & difficulty" below.
@@ -87,6 +88,30 @@ error, and the game engine silently fails to bind). So:
 - Reserve `.server.ts` only for files that are **never** imported by client
   code — e.g. `src/lib/game/stripe-webhook.server.ts`, imported only from the
   Nitro/Vite middleware above.
+
+### UI split (`src/components/game/`)
+
+`app.tsx` used to be a 1,355-line monolith holding every screen; it was
+split so an edit to one screen doesn't require loading the whole thing:
+
+- `app.tsx` — just `NeonApp` (canvas + engine boot/keybind wiring) and the
+  `MenuLayer` screen dispatcher. Add a new `Screen` here.
+- `common.tsx` — generic pieces shared by multiple screens (`NavTile`,
+  `Back`, `CenterCard`, `Toggle`, `Slider`). Zero dependency on any single
+  screen file — safe to import from anywhere without a cycle.
+- `play-hud.tsx` — the in-run HUD: top bar, boss health bar, the
+  "Upgrades" drawer, tower bar, pause overlay (incl. dev wave-skip),
+  game-over recap, toast stack. **This is the file that changes during
+  live-play bugfixing** (see the range-indicator/upgrade-label/wave-skip
+  fixes in git history) — most gameplay-facing reports land here first.
+- `screens/menu-home.tsx` — `BootCard`, `MenuHome` (the main menu + nav grid).
+- `screens/progression-panes.tsx` — Skills, Lab, Forge, Modules, Ops log.
+- `screens/economy-panes.tsx` — Battle Pass, Shop, Daily Challenge, Premium.
+- `screens/settings-pane.tsx` — Settings + the hidden dev-mode footer.
+
+When adding a new menu screen, put it in whichever `screens/*` file matches
+its theme (progression vs. economy) rather than creating a one-off file per
+screen — the goal was fewer, well-scoped files, not maximum fragmentation.
 
 ### Game engine/store split (`src/lib/game/`)
 
@@ -270,7 +295,7 @@ retuning numbers. Summary of the load-bearing pieces:
 - Grants `profile.devUnlockAll` (all difficulties unlocked) and one-shot
   unlimited scrap/coins/skill points via `engine.devGrantResources()`.
 - **Wave-skip (`engine.devSkipToWave()`) only works from the Pause screen
-  during an active run** (`DevSkipWaveRow` in `app.tsx`), because it
+  during an active run** (`DevSkipWaveRow` in `play-hud.tsx`), because it
   requires `phase === "combat"`. There is intentionally **no** working
   wave-skip control in Settings — Settings is only reachable outside a run,
   so a control there can never satisfy that guard. If you add another
