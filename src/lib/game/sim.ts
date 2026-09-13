@@ -128,6 +128,23 @@ export function positionAlong(map: Battlefield, pathIndex: number): { x: number;
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
 
+/**
+ * A tower's actual firing range this run — base range scaled by the
+ * aggregate range bonus (Lab ranks, in-run Upgrades, skills, glyphs, all
+ * folded into `mods.range` by loadoutMods), plus nova/tesla's extra reach
+ * from `splashAdd`. Exported so the renderer's range-ring indicator uses
+ * the exact same number the sim fires with — previously it drew the tower's
+ * static base range from the TOWER table, so a bought range upgrade changed
+ * nothing on screen even though it was working under the hood.
+ */
+export function effectiveRange(kind: TowerKind, mods: CombatMods): number {
+  let range = TOWER[kind].range * (1 + mods.range);
+  if ((kind === "nova" || kind === "tesla") && mods.splashAdd > 0) {
+    range += Math.min(1.4, mods.splashAdd);
+  }
+  return range;
+}
+
 export function waveComposition(wave: number): Array<[EnemyKind, number]> {
   // Caps raised so enemy volume keeps climbing well past the old wave-37
   // ceiling — from wave 37 on, every wave used to be the identical 66
@@ -144,16 +161,22 @@ export function waveComposition(wave: number): Array<[EnemyKind, number]> {
     // exceed the wave before it — see the bossHealthMultiplier comment in
     // types.ts and balance.test.ts's invariant check. Boss count grows
     // every 30 waves instead of every 50.
-    return ([
-      ["boss", 1 + Math.floor((wave - 10) / 30)],
+    return (
+      [
+        ["boss", 1 + Math.floor((wave - 10) / 30)],
+        ["bit", bits],
+        ["virus", viruses],
+        ["tank", tanks],
+      ] as Array<[EnemyKind, number]>
+    ).filter(([, n]) => n > 0);
+  }
+  return (
+    [
       ["bit", bits],
       ["virus", viruses],
       ["tank", tanks],
-    ] as Array<[EnemyKind, number]>).filter(([, n]) => n > 0);
-  }
-  return ([["bit", bits], ["virus", viruses], ["tank", tanks]] as Array<
-    [EnemyKind, number]
-  >).filter(([, n]) => n > 0);
+    ] as Array<[EnemyKind, number]>
+  ).filter(([, n]) => n > 0);
 }
 
 export type CombatTickResult = {
@@ -304,7 +327,13 @@ export class CombatSimulation {
     rng: () => number,
   ): CombatTickResult {
     this.mods = mods;
-    const result: CombatTickResult = { kills: [], scrap: 0, coreDamage: 0, coreHeal: 0, events: [] };
+    const result: CombatTickResult = {
+      kills: [],
+      scrap: 0,
+      coreDamage: 0,
+      coreHeal: 0,
+      events: [],
+    };
     this.spawnCooldown -= dt;
     while (this.spawnCooldown <= 0 && this.spawnQueue.length) {
       const kind = this.spawnQueue.shift()!;
@@ -314,7 +343,6 @@ export class CombatSimulation {
     }
 
     const dmgMult = 1 + mods.damage;
-    const rangeMult = 1 + mods.range;
     const fireMult = 1 + mods.fireRate;
     const bounty = mods.bounty;
     const splashR = 1.6 + mods.splashAdd;
@@ -323,10 +351,7 @@ export class CombatSimulation {
       tower.cooldown -= dt;
       if (tower.cooldown > 0) continue;
       const spec = TOWER[tower.kind];
-      let range = spec.range * rangeMult;
-      if ((tower.kind === "nova" || tower.kind === "tesla") && mods.splashAdd > 0) {
-        range += Math.min(1.4, mods.splashAdd);
-      }
+      const range = effectiveRange(tower.kind, mods);
       const target = this.selectTarget(tower.coord, range, preferHighest);
       if (!target) continue;
       const pos = positionAlong(this.map, target.pathIndex);
@@ -529,7 +554,16 @@ export class CombatSimulation {
     candidates.sort((a, b) => a.dist - b.dist);
     for (const c of candidates.slice(0, CombatSimulation.MAX_SPLASH_TARGETS)) {
       const falloff = 1 - 0.8 * Math.min(1, c.dist / splashR);
-      this.damageEnemy(c.index, shot.damage * 0.45 * falloff, wave, tier, bounty, result, shot.kind, rng);
+      this.damageEnemy(
+        c.index,
+        shot.damage * 0.45 * falloff,
+        wave,
+        tier,
+        bounty,
+        result,
+        shot.kind,
+        rng,
+      );
     }
   }
 

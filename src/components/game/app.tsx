@@ -916,7 +916,6 @@ function DevModeFooter({ devUnlocked }: { devUnlocked: boolean }) {
   const [taps, setTaps] = useState(0);
   const [open, setOpen] = useState(false);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [skipWave, setSkipWave] = useState("100");
 
   const handleTap = () => {
     if (resetTimer.current) clearTimeout(resetTimer.current);
@@ -949,19 +948,10 @@ function DevModeFooter({ devUnlocked }: { devUnlocked: boolean }) {
           <Btn onClick={() => getEngine()?.devGrantResources()}>
             +100,000 scrap/coins, +999 skill points
           </Btn>
-          <div className="flex items-center gap-2">
-            <input
-              value={skipWave}
-              onChange={(e) => setSkipWave(e.target.value.replace(/\D/g, ""))}
-              className="h-10 w-20 rounded-md border border-line bg-ink px-2 text-center text-fg outline-none focus:border-cyan"
-            />
-            <Btn
-              className="flex-1"
-              onClick={() => getEngine()?.devSkipToWave(Number(skipWave) || 1)}
-            >
-              Skip to wave (in-run only)
-            </Btn>
-          </div>
+          <p className="text-[11px] text-faint">
+            Wave-skip lives on the pause screen during a run — Settings has no way back to itself
+            mid-run, so it can't work from here.
+          </p>
         </Panel>
       )}
     </div>
@@ -1142,7 +1132,8 @@ function PlayHud() {
                     className="rounded-md border border-line bg-panel px-2 py-2 text-left disabled:opacity-40"
                   >
                     <div className="text-xs font-medium">{spec.label}</div>
-                    <div className="font-mono text-[11px] text-cyan">
+                    <div className="mt-0.5 text-[10px] leading-tight text-muted">{spec.detail}</div>
+                    <div className="mt-0.5 font-mono text-[11px] text-cyan">
                       {atCap ? "maxed" : cost} · {id === "repair" ? "heal" : `x${bought}`}
                     </div>
                   </button>

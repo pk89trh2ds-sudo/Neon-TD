@@ -705,7 +705,13 @@ export class GameEngine {
    *  that wave's composition — the same primitive covers both "skip ahead"
    *  and "force a boss" (any multiple of 10 spawns one, see waveComposition). */
   devSkipToWave(target: number) {
-    if (this.phase !== "combat" || target < 1) return;
+    if (this.phase !== "combat" || target < 1) {
+      // Never fail silently — this used to be reachable from Settings (no
+      // run in progress, so phase !== "combat"), where a click just did
+      // nothing with zero feedback and looked broken.
+      audio.play("deny");
+      return;
+    }
     this.wave = Math.floor(target);
     this.beginWave();
     this.eventLog = `Dev: jumped to wave ${this.wave}.`;
@@ -1127,6 +1133,7 @@ export class GameEngine {
         hoverKind: this.selectedTower,
         paused: this.paused,
         canPlace: true,
+        mods: this.mods,
       });
     }
     if (performance.now() - this.persistAt > 400) {
