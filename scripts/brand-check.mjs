@@ -27,10 +27,32 @@
  * favicon, PWA icons and title for a plain utility that keeps the og.grok.me
  * card — where no card is the expected verdict rather than a failure.
  */
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { OG_SITE_REL_PATH, readOgSite, siteHasCustomCard } from "./grok-pwa-shared.mjs";
+
+// These two were previously imported from scripts/grok-pwa-shared.mjs, which
+// was Grok-hosting-specific (manifest/extensions.js/og.grok.me head-injection
+// code) and deleted as part of de-scaffolding this app for standalone Vercel
+// deployment. brand-check's own concern — does this app declare a custom
+// share card in its local site.json — never depended on any of that, so the
+// two plain filesystem helpers it actually needs live here now instead of
+// resurrecting the Grok-coupled module.
+export const OG_SITE_REL_PATH = "src/lib/og/site.json";
+
+export function readOgSite(cwd = process.cwd()) {
+  try {
+    const raw = readFileSync(join(cwd, OG_SITE_REL_PATH), "utf8");
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function siteHasCustomCard(site = {}) {
+  return String(site.card ?? "").toLowerCase() === "custom";
+}
 
 // Over this, link scrapers (X card previews included) time out or skip the
 // image, so the card silently fails to unfurl. The og skill's JPEG contract

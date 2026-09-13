@@ -9,7 +9,7 @@ export type Screen =
   | "settings"
   | "shop"
   | "ops"
-  | "workshop"
+  | "lab"
   | "forge"
   | "daily"
   | "premium";
@@ -254,6 +254,11 @@ export type PlayerProfile = {
    *  checksum (see meta.ts) — e.g. hand-edited JSON. Excluded from
    *  analytics and, later, from leaderboards/IAP-adjacent logic. */
   tamperFlag: boolean;
+  /** Hidden dev toggle (7 taps on the Settings version string). Bypasses
+   *  difficultyUnlocked and grants unlimited resources for testing. Forces
+   *  tamperFlag semantics onto any submission path — see leaderboard-api.ts
+   *  and meta.ts — so it can never poison a shared leaderboard. */
+  devUnlockAll: boolean;
 };
 
 export type RunSnapshot = {
@@ -332,13 +337,19 @@ export const GLYPH_IDS: GlyphId[] = [
 
 export const DIFFICULTY_MOD: Record<
   DifficultyTier,
-  { hp: number; reward: number; speed: number; leak: number; drop: number; label: string; unlock: number }
+  { hp: number; reward: number; speed: number; leak: number; drop: number; label: string }
 > = {
-  normal: { hp: 1, reward: 1, speed: 1, leak: 1, drop: 1, label: "Normal", unlock: 0 },
-  hard: { hp: 1.4, reward: 1.3, speed: 1.08, leak: 1, drop: 1.25, label: "Hard", unlock: 15 },
-  nightmare: { hp: 2.1, reward: 1.65, speed: 1.16, leak: 1.2, drop: 1.6, label: "Nightmare", unlock: 30 },
-  insane: { hp: 3.2, reward: 2.2, speed: 1.25, leak: 1.4, drop: 2.2, label: "Insane", unlock: 50 },
+  normal: { hp: 1, reward: 1, speed: 1, leak: 1, drop: 1, label: "Normal" },
+  hard: { hp: 1.4, reward: 1.3, speed: 1.08, leak: 1, drop: 1.25, label: "Hard" },
+  nightmare: { hp: 2.1, reward: 1.65, speed: 1.16, leak: 1.2, drop: 1.6, label: "Nightmare" },
+  insane: { hp: 3.2, reward: 2.2, speed: 1.25, leak: 1.4, drop: 2.2, label: "Insane" },
 };
+
+/** Wave a player must reach on a tier to unlock the next one (index N-1 in
+ *  DIFFICULTIES unlocks index N). Chosen so a moderately-invested Lab build
+ *  clears it and a fresh one doesn't — see endlessScaling below, tuned to
+ *  the same target. */
+export const DIFFICULTY_UNLOCK_WAVE = 100;
 
 export const ENEMY: Record<
   EnemyKind,
@@ -347,7 +358,7 @@ export const ENEMY: Record<
   bit: { health: 18, speed: 1.55, bounty: 6, core: 1, label: "Bit" },
   virus: { health: 32, speed: 2.15, bounty: 9, core: 1, label: "Virus" },
   tank: { health: 90, speed: 0.95, bounty: 16, core: 2, label: "Tank" },
-  boss: { health: 280, speed: 0.72, bounty: 60, core: 5, label: "Prime" },
+  boss: { health: 280, speed: 0.72, bounty: 60, core: 12, label: "Prime" },
 };
 
 export const TOWER: Record<
@@ -478,20 +489,46 @@ export function emptyMods(): CombatMods {
   };
 }
 
+/**
+ * Steeper than the original (early log coefficient 0.48→0.55, late power
+ * kicks in at wave 25 instead of 40 with exponent 1.28→1.42) so a run with
+ * no permanent progression dies well before wave 40, while a heavily
+ * invested Lab build can still push toward wave 200. See docs/balance.md
+ * for the reasoning and the headless sim used to tune these constants.
+ */
 export function endlessScaling(wave: number): number {
-  const early = 1 + Math.log(Math.max(wave, 1)) * 0.48;
-  const late = wave <= 40 ? 0 : Math.pow((wave - 40) / 16, 1.28);
+  const early = 1 + Math.log(Math.max(wave, 1)) * 0.55;
+  const late = wave <= 25 ? 0 : Math.pow((wave - 25) / 13, 1.42);
   return early + late;
 }
 
-export function enemyHealth(kind: EnemyKind, wave: number, tier: DifficultyTier): number {
-  return ENEMY[kind].health * DIFFICULTY_MOD[tier].hp * endlessScaling(wave);
+/** Extra HP multiplier stacked onto boss enemies only, on top of
+ *  endlessScaling — bosses are meant to be a real spike, not the diluted
+ *  wave they replace (see waveComposition in sim.ts). */
+export function bossHealthMultiplier(wave: number): number {
+  return 1 + Math.floor(wave / 10) * 0.15;
 }
 
-export function killBounty(kind: EnemyKind, tier: DifficultyTier, bountyBonus: number): number {
+export function enemyHealth(kind: EnemyKind, wave: number, tier: DifficultyTier): number {
+  const boss = kind === "boss" ? bossHealthMultiplier(wave) : 1;
+  return ENEMY[kind].health * DIFFICULTY_MOD[tier].hp * endlessScaling(wave) * boss;
+}
+
+/**
+ * Scales with wave (the original never did, which let purchasing power stay
+ * flat forever) but stays well under enemyHealth's growth so scrap doesn't
+ * runaway-compound the way workshopRank("cash")-fed income did.
+ */
+export function killBounty(
+  kind: EnemyKind,
+  wave: number,
+  tier: DifficultyTier,
+  bountyBonus: number,
+): number {
+  const waveMult = 1 + Math.min(1.5, wave * 0.006);
   return Math.max(
     1,
-    Math.round(ENEMY[kind].bounty * DIFFICULTY_MOD[tier].reward * (1 + bountyBonus)),
+    Math.round(ENEMY[kind].bounty * DIFFICULTY_MOD[tier].reward * waveMult * (1 + bountyBonus)),
   );
 }
 
@@ -539,8 +576,21 @@ export function passLevel(xp: number): number {
   return Math.max(1, 1 + Math.floor(xp / 100));
 }
 
+/** Reaching DIFFICULTY_UNLOCK_WAVE on tier N-1 unlocks tier N. Normal itself
+ *  has no predecessor, so it's always unlocked. Dev mode bypasses this via
+ *  profile.devUnlockAll (see meta.ts). */
 export function difficultyUnlocked(p: PlayerProfile, d: DifficultyTier): boolean {
-  return p.highestWaveReached >= DIFFICULTY_MOD[d].unlock;
+  if (p.devUnlockAll) return true;
+  const idx = DIFFICULTIES.indexOf(d);
+  if (idx <= 0) return true;
+  const prev = DIFFICULTIES[idx - 1]!;
+  return (p.highestByDifficulty[prev] ?? 0) >= DIFFICULTY_UNLOCK_WAVE;
+}
+
+/** The tier immediately below `d` in unlock order, or null for normal. */
+export function previousDifficulty(d: DifficultyTier): DifficultyTier | null {
+  const idx = DIFFICULTIES.indexOf(d);
+  return idx > 0 ? DIFFICULTIES[idx - 1]! : null;
 }
 
 export function rewardLabel(r: Reward): string {
@@ -643,5 +693,6 @@ export function defaultProfile(): PlayerProfile {
     lastRecap: null,
     highestByDifficulty: {},
     tamperFlag: false,
+    devUnlockAll: false,
   };
 }

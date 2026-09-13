@@ -1,5 +1,11 @@
-import { ENEMY, TOWER, type GridCoord, type TowerKind } from "./types";
-import { keyOf, positionAlong, type Battlefield, type CombatSimulation } from "./sim";
+import { type CombatMods, type GridCoord, type TowerKind } from "./types";
+import {
+  effectiveRange,
+  keyOf,
+  positionAlong,
+  type Battlefield,
+  type CombatSimulation,
+} from "./sim";
 
 type Particle = {
   x: number;
@@ -65,18 +71,7 @@ export class Renderer {
   }
 
   async load() {
-    const names = [
-      "pulse",
-      "beam",
-      "nova",
-      "tesla",
-      "bit",
-      "virus",
-      "tank",
-      "boss",
-      "core",
-      "pad",
-    ];
+    const names = ["pulse", "beam", "nova", "tesla", "bit", "virus", "tank", "boss", "core", "pad"];
     await Promise.all(
       names.map(async (n) => {
         this.images[n] = await load(`/sprites/${n}.png`);
@@ -150,6 +145,7 @@ export class Renderer {
       hoverKind: TowerKind;
       paused: boolean;
       canPlace: boolean;
+      mods: CombatMods;
     },
   ) {
     this.time += dt;
@@ -190,7 +186,7 @@ export class Renderer {
 
   private drawBoard(
     sim: CombatSimulation,
-    opts: { selected: GridCoord | null; hoverKind: TowerKind; canPlace: boolean },
+    opts: { selected: GridCoord | null; hoverKind: TowerKind; canPlace: boolean; mods: CombatMods },
   ) {
     const ctx = this.ctx;
     const { columns, rows } = sim.map;
@@ -276,13 +272,23 @@ export class Renderer {
           : "rgba(255,77,109,0.12)";
       ctx.fillRect(hx, hy, cell, cell);
       if (buildable && !occupied) {
-        this.rangeRing(this.hover.x, this.hover.y, TOWER[opts.hoverKind].range, TOWER_COLOR[opts.hoverKind]);
+        this.rangeRing(
+          this.hover.x,
+          this.hover.y,
+          effectiveRange(opts.hoverKind, opts.mods),
+          TOWER_COLOR[opts.hoverKind],
+        );
       }
     }
     if (opts.selected) {
       const t = sim.towerAt(opts.selected);
       if (t) {
-        this.rangeRing(t.coord.x, t.coord.y, TOWER[t.kind].range, TOWER_COLOR[t.kind]);
+        this.rangeRing(
+          t.coord.x,
+          t.coord.y,
+          effectiveRange(t.kind, opts.mods),
+          TOWER_COLOR[t.kind],
+        );
         ctx.strokeStyle = "rgba(62,232,255,0.9)";
         ctx.lineWidth = 2;
         ctx.strokeRect(t.coord.x * cell + 2, t.coord.y * cell + 2, cell - 4, cell - 4);
@@ -433,7 +439,14 @@ export class Renderer {
     const img = this.images.core;
     const size = cell * 1.15;
     const pulse = 1 + Math.sin(this.time * 3) * 0.04;
-    if (img?.width) this.ctx.drawImage(img, x - (size * pulse) / 2, y - (size * pulse) / 2, size * pulse, size * pulse);
+    if (img?.width)
+      this.ctx.drawImage(
+        img,
+        x - (size * pulse) / 2,
+        y - (size * pulse) / 2,
+        size * pulse,
+        size * pulse,
+      );
     else {
       this.ctx.fillStyle = "#3ee8ff";
       this.ctx.beginPath();

@@ -45,7 +45,7 @@ import { createIapCheckoutSession, getEntitlements } from "./entitlements-api";
 import { type IapProductKey } from "./iap-catalog";
 import { Renderer } from "./renderer";
 import { useGame } from "./store";
-import { buyWorkshop, IN_RUN, inRunCost } from "./workshop";
+import { buyWorkshop, IN_RUN, inRunAtCap, inRunCost } from "./workshop";
 import {
   DIFFICULTY_MOD,
   MILESTONES,
@@ -116,7 +116,7 @@ export class GameEngine {
   runGlyphs: GlyphId[] = [];
   runChassisDrop: ChassisKind | null = null;
   cipherName: string | null = null;
-  labOpen = false;
+  upgradesOpen = false;
   /**
    * Which ad portal (if any) this instance is running inside. Fixed at
    * construction — the embedding frame can't change mid-session. Used to gate
@@ -323,7 +323,7 @@ export class GameEngine {
     this.runKills = 0;
     this.runGlyphs = [];
     this.runChassisDrop = null;
-    this.labOpen = false;
+    this.upgradesOpen = false;
     this.settled = false;
     this.phase = "combat";
     this.refreshMods();
@@ -385,7 +385,7 @@ export class GameEngine {
     this.runKills = snap.runKills ?? 0;
     this.runGlyphs = [];
     this.runChassisDrop = null;
-    this.labOpen = false;
+    this.upgradesOpen = false;
     this.settled = false;
     this.sim.restoreTowers(snap.towers ?? []);
     this.refreshMods();
@@ -420,8 +420,8 @@ export class GameEngine {
     }
     this.phase = "menu";
     this.sim.resetRun();
-    this.labOpen = false;
-    useGame.getState().patch({ screen, hasSavedRun: false, phase: "menu", labOpen: false });
+    this.upgradesOpen = false;
+    useGame.getState().patch({ screen, hasSavedRun: false, phase: "menu", upgradesOpen: false });
     this.syncHud();
     getAdAdapter().gameplayStop();
     this.maybeCommercialBreak();
@@ -455,8 +455,8 @@ export class GameEngine {
     this.syncHud();
   }
 
-  toggleLab() {
-    this.labOpen = !this.labOpen;
+  toggleUpgrades() {
+    this.upgradesOpen = !this.upgradesOpen;
     audio.play("ui");
     this.syncHud();
   }
@@ -464,6 +464,12 @@ export class GameEngine {
   buyInRun(id: InRunId) {
     if (this.phase !== "combat" && this.phase !== "upgrade") return;
     const bought = this.inRun[id] ?? 0;
+    if (inRunAtCap(bought, id)) {
+      audio.play("deny");
+      this.eventLog = `${IN_RUN[id].label} maxed this run.`;
+      this.syncHud();
+      return;
+    }
     const cost = inRunCost(bought, id, this.wave);
     if (this.scrap < cost) {
       audio.play("deny");
@@ -472,11 +478,16 @@ export class GameEngine {
       return;
     }
     this.scrap -= cost;
+    // `repair` used to skip this counter entirely, so inRunCost(0, "repair",
+    // wave) — a flat, near-constant cost — was recomputed on every single
+    // purchase forever. Same 1.16^n curve as every other line now; this is
+    // what turned +4 max core into an unbounded scrap sink at ~178 scrap
+    // apiece by wave 250.
+    this.inRun[id] = bought + 1;
     if (id === "repair") {
       this.coreHP += IN_RUN.repair.step;
       this.maxCore = Math.max(this.maxCore, this.coreHP);
     } else {
-      this.inRun[id] = bought + 1;
       this.refreshMods();
     }
     this.eventLog = `${IN_RUN[id].label} ${this.inRun[id] ?? "applied"}.`;
@@ -488,7 +499,7 @@ export class GameEngine {
   buyWorkshopId(id: WorkshopId) {
     if (buyWorkshop(this.profile, id)) {
       audio.play("claim");
-      this.afterMeta("Workshop rank up");
+      this.afterMeta("Lab rank up");
       this.track("workshop_upgrade", { id });
     } else audio.play("deny");
   }
@@ -668,6 +679,43 @@ export class GameEngine {
     const trimmed = name.trim().slice(0, 24);
     this.profile.displayName = trimmed || "Operator";
     this.flushProfile();
+    this.syncHud();
+  }
+
+  // --- Hidden dev mode (7 taps on the Settings version string) -----------
+  // Testing-only. Reaching devUnlockAll=true permanently tamper-flags the
+  // profile (see meta.ts loadProfile/importProfileJson) so it can never
+  // submit to the shared daily leaderboard or count in analytics, even
+  // after the toggle is switched back off.
+
+  devUnlockAll() {
+    this.profile.devUnlockAll = true;
+    this.afterMeta("Dev: all difficulties unlocked");
+  }
+
+  devGrantResources() {
+    this.scrap += 100_000;
+    this.profile.bankScrap += 100_000;
+    this.profile.skillPoints += 999;
+    this.persistRun();
+    this.afterMeta("Dev: resources granted");
+  }
+
+  /** Jumps straight to `target` wave, resetting combatants and requeuing
+   *  that wave's composition — the same primitive covers both "skip ahead"
+   *  and "force a boss" (any multiple of 10 spawns one, see waveComposition). */
+  devSkipToWave(target: number) {
+    if (this.phase !== "combat" || target < 1) {
+      // Never fail silently — this used to be reachable from Settings (no
+      // run in progress, so phase !== "combat"), where a click just did
+      // nothing with zero feedback and looked broken.
+      audio.play("deny");
+      return;
+    }
+    this.wave = Math.floor(target);
+    this.beginWave();
+    this.eventLog = `Dev: jumped to wave ${this.wave}.`;
+    this.persistRun();
     this.syncHud();
   }
 
@@ -1085,6 +1133,7 @@ export class GameEngine {
         hoverKind: this.selectedTower,
         paused: this.paused,
         canPlace: true,
+        mods: this.mods,
       });
     }
     if (performance.now() - this.persistAt > 400) {
@@ -1101,11 +1150,16 @@ export class GameEngine {
       this.profile.difficulty,
       this.mods,
       equipped.has("targetingAI"),
+      () => this.rng.nextFloat(),
     );
     if (result.scrap) this.scrap += result.scrap;
     if (result.coreHeal) {
-      this.coreHP = Math.min(this.maxCore + 8, this.coreHP + result.coreHeal);
-      this.maxCore = Math.max(this.maxCore, this.coreHP);
+      // Clamp to maxCore — no ratchet. The old `maxCore = max(maxCore,
+      // coreHP)` right after the clamp undid the clamp on the very next
+      // line, letting coreOnKill (e.g. PHOENIX) grow max core without
+      // bound over a long run. Only startingCore()/the repair line below
+      // are allowed to raise maxCore now.
+      this.coreHP = Math.min(this.maxCore, this.coreHP + result.coreHeal);
     }
     if (result.kills.length) {
       progressMission(this.profile, "Eliminate", result.kills.length);
@@ -1135,6 +1189,15 @@ export class GameEngine {
         this.renderer.burst(ev.x, ev.y, col, ev.kind === "boss" ? 22 : 10, 70);
         this.renderer.addTrauma(ev.kind === "boss" ? 0.45 : 0.12);
         this.maybeDropGlyph(ev.kind);
+        if (ev.kind === "boss") {
+          // Guaranteed reward on top of killBounty's normal payout and the
+          // 100%-chance glyph drop already in maybeDropGlyph — bosses are
+          // meant to be the reliable source of a big scrap swing, not a
+          // relief wave.
+          const bonus = 80 + this.wave * 2;
+          this.scrap += bonus;
+          useGame.getState().toast("Boss down", `+${bonus} scrap`, "ok");
+        }
       }
       if (ev.t === "leak") {
         audio.play("leak");
@@ -1161,9 +1224,11 @@ export class GameEngine {
     const income = (this.inRun.income ?? 0) * IN_RUN.income.step;
     if (income) this.scrap += income;
     if (this.mods.corePerWave > 0) {
+      // Clamp to maxCore, no ratchet — see the tick() coreHeal comment
+      // above. A cipher with corePerWave (BULWARK/FORTITUDE/LAST WISH)
+      // otherwise grew max core without bound over a long run.
       const heal = Math.floor(this.mods.corePerWave);
-      this.coreHP = Math.min(this.maxCore + 12, this.coreHP + heal);
-      this.maxCore = Math.max(this.maxCore, this.coreHP);
+      this.coreHP = Math.min(this.maxCore, this.coreHP + heal);
     }
     this.eventLog = `Wave ${this.wave} incoming.`;
   }
@@ -1182,15 +1247,30 @@ export class GameEngine {
       this.offers.unshift(this.sim.injectRareOffer(clearedWave));
     }
     this.noteWave(clearedWave);
-    this.profile.skillPoints += Math.max(1, Math.floor(clearedWave / 5));
-    this.profile.battlePassXP += clearedWave * 8;
+    // Was `Math.floor(clearedWave / 5)` points on EVERY clear — +50 points
+    // for a single wave-250 clear against a 40-point total skill tree. Flat
+    // rate now: exactly 1 point every 5th wave, however high the wave count
+    // climbs. Same story for pass XP below (was `clearedWave * 8`, +2000 XP
+    // for one wave-250 clear against a 30-level/3000-XP pass).
+    if (clearedWave % 5 === 0) this.profile.skillPoints += 1;
+    this.profile.battlePassXP += Math.round(Math.min(80, 8 + clearedWave * 0.3));
     // No upgrade-screen pause — next wave starts immediately, offers float over HUD
     this.wave += 1;
     this.eventLog = `Wave ${clearedWave} cleared. Wave ${this.wave} incoming.`;
     audio.play("clear");
     this.renderer.addTrauma(0.2);
     this.beginWave();
-    useGame.getState().toast(`Wave ${this.wave}`, "Enemies incoming — game never pauses", "info");
+    if (this.wave % 10 === 0) {
+      useGame
+        .getState()
+        .toast(
+          `WAVE ${this.wave} — BOSS INCOMING`,
+          "A Prime unit is inbound. Guaranteed reward on the kill.",
+          "danger",
+        );
+    } else {
+      useGame.getState().toast(`Wave ${this.wave}`, "Enemies incoming — game never pauses", "info");
+    }
     this.flushProfile();
     this.persistRun();
     this.syncHud();
@@ -1337,8 +1417,11 @@ export class GameEngine {
       const day = this.dailyChallengeDay;
       const wave = this.wave;
       this.dailyChallengeDay = null;
-      // Skip leaderboard submission on portals without backend auth (e.g. CrazyGames).
-      if (this.portal !== "crazygames") {
+      // Skip leaderboard submission on portals without backend auth (e.g.
+      // CrazyGames), and on a tamper-flagged profile (hand-edited save, or
+      // dev mode ever having been enabled — see meta.ts loadProfile) so an
+      // unlimited-resources testing run can never poison the shared board.
+      if (this.portal !== "crazygames" && !this.profile.tamperFlag) {
         submitDailyScore({ data: { day, wave, displayName: this.profile.displayName } })
           .then(() => this.track("daily_challenge_submit", { day, wave }))
           .catch(() => {
@@ -1434,8 +1517,9 @@ export class GameEngine {
       endless: true,
       inRun: { ...this.inRun },
       cipherName: this.cipherName,
-      labOpen: this.labOpen,
+      upgradesOpen: this.upgradesOpen,
       recap: this.profile.lastRecap,
+      ...this.bossStatus(),
     });
   }
 
@@ -1447,7 +1531,23 @@ export class GameEngine {
       enemiesAlive: this.sim.enemies.length,
       pendingSpawns: this.sim.pendingSpawns(),
       eventLog: this.eventLog,
+      ...this.bossStatus(),
     });
+  }
+
+  /** Aggregate HP fraction across all alive bosses, for the HUD boss health
+   *  bar (see the "Boss + guaranteed reward" wave design). Throttled the
+   *  same as the rest of syncHudLight (every ~400ms), which is plenty for a
+   *  DOM-rendered bar next to a canvas that redraws every frame on its own. */
+  private bossStatus(): { bossActive: boolean; bossHpFrac: number } {
+    let hp = 0;
+    let maxHp = 0;
+    for (const e of this.sim.enemies) {
+      if (e.kind !== "boss" || !e.alive) continue;
+      hp += Math.max(0, e.health);
+      maxHp += e.maxHealth;
+    }
+    return { bossActive: maxHp > 0, bossHpFrac: maxHp > 0 ? hp / maxHp : 1 };
   }
 }
 

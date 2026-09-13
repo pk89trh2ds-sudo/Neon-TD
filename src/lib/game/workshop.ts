@@ -1,4 +1,6 @@
-import { workshopRank, type InRunId, type PlayerProfile, type WorkshopId } from "./types";
+// Extension included so `node --experimental-strip-types` can resolve this
+// directly for balance.test.ts — see the matching note in sim.ts.
+import { workshopRank, type InRunId, type PlayerProfile, type WorkshopId } from "./types.ts";
 
 export const IN_RUN_IDS: InRunId[] = ["dmg", "rng", "rate", "bounty", "income", "repair"];
 
@@ -52,14 +54,40 @@ export const WORKSHOP: Record<
 
 export const IN_RUN: Record<
   InRunId,
-  { label: string; detail: string; base: number; step: number }
+  {
+    label: string;
+    detail: string;
+    base: number;
+    step: number;
+    /** Per-purchase cost multiplier. Economy lines (income/bounty) use a
+     *  steeper curve than combat lines so they can't fund an unlimited
+     *  compounding bankroll the way a flat 1.16 let them — see docs/balance.md. */
+    growth: number;
+    /** Hard stack cap. Only income/bounty have one — combat lines stay
+     *  uncapped but self-limit through cost growth instead. */
+    cap?: number;
+  }
 > = {
-  dmg: { label: "Overload", detail: "+4% damage this run", base: 22, step: 0.04 },
-  rng: { label: "Longscan", detail: "+3% range this run", base: 20, step: 0.03 },
-  rate: { label: "Coolant", detail: "+4% fire rate this run", base: 24, step: 0.04 },
-  bounty: { label: "Bounty", detail: "+5% kill scrap this run", base: 18, step: 0.05 },
-  income: { label: "Income", detail: "+8 scrap each wave", base: 16, step: 8 },
-  repair: { label: "Patch", detail: "+4 core integrity", base: 28, step: 4 },
+  dmg: { label: "Overload", detail: "+6% damage this run", base: 22, step: 0.06, growth: 1.16 },
+  rng: { label: "Longscan", detail: "+5% range this run", base: 20, step: 0.05, growth: 1.16 },
+  rate: { label: "Coolant", detail: "+6% fire rate this run", base: 24, step: 0.06, growth: 1.16 },
+  bounty: {
+    label: "Bounty",
+    detail: "+3% kill scrap this run",
+    base: 18,
+    step: 0.03,
+    growth: 1.32,
+    cap: 10,
+  },
+  income: {
+    label: "Income",
+    detail: "+5 scrap each wave",
+    base: 16,
+    step: 5,
+    growth: 1.32,
+    cap: 12,
+  },
+  repair: { label: "Patch", detail: "+4 core integrity", base: 28, step: 4, growth: 1.16 },
 };
 
 export function workshopCost(p: PlayerProfile, id: WorkshopId): number {
@@ -76,5 +104,11 @@ export function buyWorkshop(p: PlayerProfile, id: WorkshopId): boolean {
 }
 
 export function inRunCost(bought: number, id: InRunId, wave: number): number {
-  return Math.floor(IN_RUN[id].base * Math.pow(1.16, bought) + wave * 0.6);
+  return Math.floor(IN_RUN[id].base * Math.pow(IN_RUN[id].growth, bought) + wave * 0.6);
+}
+
+/** True once a capped in-run line (income/bounty) can't be bought again. */
+export function inRunAtCap(bought: number, id: InRunId): boolean {
+  const cap = IN_RUN[id].cap;
+  return cap != null && bought >= cap;
 }
