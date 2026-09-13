@@ -23,7 +23,14 @@ import { shopForDay } from "@/lib/game/meta";
 import { getDailyLeaderboard } from "@/lib/game/leaderboard-api";
 import { IAP_CATALOG, IAP_PRODUCT_KEYS } from "@/lib/game/iap-catalog";
 import { CHASSIS, CIPHERS, GLYPH, prefixCipher, recipeHint } from "@/lib/game/ciphers";
-import { IN_RUN, IN_RUN_IDS, WORKSHOP, inRunAtCap, inRunCost, workshopCost } from "@/lib/game/workshop";
+import {
+  IN_RUN,
+  IN_RUN_IDS,
+  WORKSHOP,
+  inRunAtCap,
+  inRunCost,
+  workshopCost,
+} from "@/lib/game/workshop";
 import { useGame } from "@/lib/game/store";
 import {
   DIFFICULTIES,
@@ -163,7 +170,9 @@ function BootCard() {
         <h1 className="font-display text-6xl font-semibold leading-none tracking-[0.18em] text-ice">
           NEON
         </h1>
-        <p className="font-display text-2xl leading-none tracking-[0.32em] text-cyan">TOWER DEFENSE</p>
+        <p className="font-display text-2xl leading-none tracking-[0.32em] text-cyan">
+          TOWER DEFENSE
+        </p>
       </div>
       <Btn variant="primary" className="min-w-48" onClick={() => getEngine()?.enterMenu()}>
         Enter grid
@@ -187,7 +196,8 @@ function MenuHome() {
         <p className="text-xs uppercase tracking-[0.35em] text-muted">Operator {p.displayName}</p>
         <h1 className="font-display text-5xl font-semibold tracking-[0.16em] text-ice">NEON TD</h1>
         <p className="mt-1 max-w-sm text-sm text-muted">
-          Endless circuit. Cash Upgrades in-run, bank coins into the Lab, socket glyphs into Cipher Words.
+          Endless circuit. Cash Upgrades in-run, bank coins into the Lab, socket glyphs into Cipher
+          Words.
         </p>
       </header>
 
@@ -202,8 +212,9 @@ function MenuHome() {
         <Panel className="space-y-2">
           <p className="text-xs uppercase tracking-[0.2em] text-cyan">Field briefing</p>
           <p className="text-sm text-muted">
-            Tap dark tiles to deploy Pulse. Waves never end. Spend scrap on Upgrades during a run. After you
-            fall or bank, spend coins on permanent Lab ranks. Socket glyphs in the Forge like rune words.
+            Tap dark tiles to deploy Pulse. Waves never end. Spend scrap on Upgrades during a run.
+            After you fall or bank, spend coins on permanent Lab ranks. Socket glyphs in the Forge
+            like rune words.
           </p>
           <Btn variant="quiet" onClick={() => getEngine()?.finishTutorial()}>
             Mark as read
@@ -250,11 +261,7 @@ function MenuHome() {
         <Play className="size-4" />
         Start new run
       </Btn>
-      {hasRun && (
-        <Btn onClick={() => getEngine()?.continueRun()}>
-          Continue run
-        </Btn>
-      )}
+      {hasRun && <Btn onClick={() => getEngine()?.continueRun()}>Continue run</Btn>}
 
       <Panel className="space-y-3">
         <div className="flex items-center justify-between">
@@ -323,15 +330,7 @@ function MenuHome() {
   );
 }
 
-function NavTile({
-  icon,
-  label,
-  to,
-}: {
-  icon: ReactNode;
-  label: string;
-  to: Screen;
-}) {
+function NavTile({ icon, label, to }: { icon: ReactNode; label: string; to: Screen }) {
   return (
     <button
       onClick={() => {
@@ -348,7 +347,11 @@ function NavTile({
 
 function Back() {
   return (
-    <Btn variant="quiet" className="self-start" onClick={() => useGame.getState().patch({ screen: "menu" })}>
+    <Btn
+      variant="quiet"
+      className="self-start"
+      onClick={() => useGame.getState().patch({ screen: "menu" })}
+    >
       Back
     </Btn>
   );
@@ -429,14 +432,17 @@ function ForgePane() {
   const [pick, setPick] = useState<GlyphId | null>(null);
   const equipped = p.chassis.find((c) => c.id === p.equippedChassisId) ?? p.chassis[0];
   const word = equipped ? prefixCipher(equipped.sockets) : null;
-  const complete = equipped ? equipped.sockets.every((s) => s) && word && word.have === equipped.sockets.length : false;
+  const complete = equipped
+    ? equipped.sockets.every((s) => s) && word && word.have === equipped.sockets.length
+    : false;
 
   return (
     <div className="flex flex-col gap-4 py-4">
       <Back />
       <h2 className="font-display text-3xl">Forge</h2>
       <p className="text-sm text-muted">
-        Socket glyphs in order. A complete sequence becomes a Cipher Word and replaces the individual bonuses.
+        Socket glyphs in order. A complete sequence becomes a Cipher Word and replaces the
+        individual bonuses.
       </p>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -446,7 +452,9 @@ function ForgePane() {
             onClick={() => getEngine()?.equipChassis(ch.id)}
             className={cn(
               "min-h-11 shrink-0 rounded-md border px-3 text-xs uppercase tracking-wider",
-              ch.id === equipped?.id ? "border-cyan bg-cyan/15 text-cyan" : "border-line text-muted",
+              ch.id === equipped?.id
+                ? "border-cyan bg-cyan/15 text-cyan"
+                : "border-line text-muted",
             )}
           >
             {CHASSIS[ch.kind].label}
@@ -461,7 +469,9 @@ function ForgePane() {
               {CHASSIS[equipped.kind].sockets} sockets
             </span>
             {complete && word && (
-              <span className="font-display text-lg tracking-widest text-cyan">{word.cipher.name}</span>
+              <span className="font-display text-lg tracking-widest text-cyan">
+                {word.cipher.name}
+              </span>
             )}
             {!complete && word && (
               <span className="text-xs text-muted">
@@ -486,7 +496,9 @@ function ForgePane() {
               </button>
             ))}
           </div>
-          <p className="text-[11px] text-faint">Tap a glyph, then a socket. Empty socket tap unsockets.</p>
+          <p className="text-[11px] text-faint">
+            Tap a glyph, then a socket. Empty socket tap unsockets.
+          </p>
         </Panel>
       )}
 
@@ -692,8 +704,8 @@ function DailyPane() {
       <Back />
       <h2 className="font-display text-3xl">Daily challenge</h2>
       <p className="text-sm text-muted">
-        Same circuit, same drops, for everyone today — Normal difficulty, your
-        permanent upgrades still apply. Resets {formatHMS(msUntilMidnight())}.
+        Same circuit, same drops, for everyone today — Normal difficulty, your permanent upgrades
+        still apply. Resets {formatHMS(msUntilMidnight())}.
       </p>
       <Btn variant="primary" onClick={() => getEngine()?.startDailyChallenge()}>
         <Play className="size-4" />
@@ -732,8 +744,8 @@ function PremiumPane() {
       <Back />
       <h2 className="font-display text-3xl">Premium</h2>
       <p className="text-sm text-muted">
-        Optional, one-time purchases. Nothing here sells power — no scrap, no
-        skill points, no shortcuts past the Lab grind.
+        Optional, one-time purchases. Nothing here sells power — no scrap, no skill points, no
+        shortcuts past the Lab grind.
       </p>
       <SignedOut>
         <Panel className="space-y-2">
@@ -858,13 +870,13 @@ function SettingsPane() {
       >
         Prestige (+5 skill points)
       </Btn>
-      <p className="text-xs text-faint">Unlocks after wave 50. Keeps skills, modules, Lab, and forge.</p>
+      <p className="text-xs text-faint">
+        Unlocks after wave 50. Keeps skills, modules, Lab, and forge.
+      </p>
       <Panel className="space-y-3">
         <p className="text-xs uppercase tracking-[0.2em] text-muted">Cloud sync</p>
         <SignedOut>
-          <p className="text-sm text-muted">
-            Sign in to sync your save and streak across devices.
-          </p>
+          <p className="text-sm text-muted">Sign in to sync your save and streak across devices.</p>
           <Btn onClick={() => (window.location.href = "/login")}>Sign in</Btn>
         </SignedOut>
         <SignedIn>
@@ -1034,6 +1046,7 @@ function PlayHud() {
   const offers = useGame((s) => s.offers);
   const bossActive = useGame((s) => s.bossActive);
   const bossHpFrac = useGame((s) => s.bossHpFrac);
+  const devUnlockAll = useGame((s) => s.profile.devUnlockAll);
 
   return (
     <>
@@ -1041,10 +1054,19 @@ function PlayHud() {
         <div className="pointer-events-auto mx-auto flex max-w-4xl items-center gap-2 rounded-lg border border-line hud-panel px-3 py-2">
           <div className="font-mono text-xs tracking-widest text-cyan">WAVE {wave}</div>
           <div className="text-[11px] uppercase text-muted">endless</div>
-          {cipher && <div className="hidden font-mono text-[11px] tracking-widest text-ok sm:block">{cipher}</div>}
+          {cipher && (
+            <div className="hidden font-mono text-[11px] tracking-widest text-ok sm:block">
+              {cipher}
+            </div>
+          )}
           <div className="ml-auto flex items-center gap-3 font-mono text-xs">
             <span className="text-ice tabular">{scrap} SCRAP</span>
-            <span className={cn("flex items-center gap-1 tabular", core <= 5 ? "text-signal" : "text-ok")}>
+            <span
+              className={cn(
+                "flex items-center gap-1 tabular",
+                core <= 5 ? "text-signal" : "text-ok",
+              )}
+            >
               <Shield className="size-3.5" />
               {core}/{maxCore}
             </span>
@@ -1182,10 +1204,16 @@ function PlayHud() {
         <div className="pointer-events-none absolute inset-x-0 top-24 flex justify-center px-4">
           <div className="pointer-events-auto max-w-sm rounded-lg border border-line hud-panel px-4 py-3 text-sm">
             {tutorial === 1 && "Tap a dark tile beside the circuit to deploy Pulse."}
-            {tutorial === 2 && "Hostiles leak into the vault if they finish the lane. Keep fire on the front."}
-            {tutorial === 3 && "Wave clear. Upgrades appear on the right — tap to install while fighting."}
+            {tutorial === 2 &&
+              "Hostiles leak into the vault if they finish the lane. Keep fire on the front."}
+            {tutorial === 3 &&
+              "Wave clear. Upgrades appear on the right — tap to install while fighting."}
             <div className="mt-2 flex justify-end">
-              <Btn variant="quiet" className="min-h-9" onClick={() => getEngine()?.finishTutorial()}>
+              <Btn
+                variant="quiet"
+                className="min-h-9"
+                onClick={() => getEngine()?.finishTutorial()}
+              >
                 Dismiss
               </Btn>
             </div>
@@ -1201,11 +1229,40 @@ function PlayHud() {
           </Btn>
           <Btn onClick={() => getEngine()?.cashOut()}>Bank &amp; end run</Btn>
           <Btn onClick={() => getEngine()?.returnToMenu()}>Abort to menu</Btn>
+          {devUnlockAll && <DevSkipWaveRow />}
         </CenterCard>
       )}
 
       {phase === "gameOver" && <GameOverCard />}
     </>
+  );
+}
+
+/** In-run wave-skip, shown on the pause screen once dev mode is already
+ *  active (Settings has no path back to itself mid-run, so this is the
+ *  only place devSkipToWave — which requires phase === "combat" — is
+ *  actually reachable). */
+function DevSkipWaveRow() {
+  const wave = useGame((s) => s.wave);
+  const [value, setValue] = useState(String(wave));
+  return (
+    <div className="flex items-center gap-2 border-t border-line pt-3">
+      <span className="text-[11px] uppercase tracking-widest text-signal">Dev</span>
+      <input
+        value={value}
+        onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))}
+        className="h-10 w-20 rounded-md border border-line bg-ink px-2 text-center text-fg outline-none focus:border-cyan"
+      />
+      <Btn
+        className="flex-1"
+        onClick={() => {
+          getEngine()?.devSkipToWave(Number(value) || 1);
+          getEngine()?.pauseToggle();
+        }}
+      >
+        Skip to wave
+      </Btn>
+    </div>
   );
 }
 
@@ -1225,14 +1282,18 @@ function GameOverCard() {
   const p = useGame((s) => s.profile);
   const recap = p.lastRecap;
   const engine = getEngine();
-  const canPatch = engine ? !engine.corePatchUsed && core <= 0 && (p.bankScrap >= 80 || useGame.getState().scrap >= 80) : false;
+  const canPatch = engine
+    ? !engine.corePatchUsed && core <= 0 && (p.bankScrap >= 80 || useGame.getState().scrap >= 80)
+    : false;
   const canRevive = engine ? !engine.reviveAdUsed && core <= 0 : false;
   return (
     <CenterCard>
       <h2 className={cn("font-display text-3xl", core > 0 ? "text-cyan" : "text-signal")}>
         {core > 0 ? "Run banked" : "Core offline"}
       </h2>
-      <p className="text-sm text-muted">Reached wave {wave} · {DIFFICULTY_MOD[p.difficulty].label}</p>
+      <p className="text-sm text-muted">
+        Reached wave {wave} · {DIFFICULTY_MOD[p.difficulty].label}
+      </p>
       {recap && (
         <Panel className="space-y-1">
           <div className="flex justify-between text-sm">
@@ -1250,7 +1311,9 @@ function GameOverCard() {
             </div>
           )}
           {recap.glyphs.length > 0 && (
-            <div className="text-xs text-muted">Glyphs {recap.glyphs.map((g) => g.toUpperCase()).join(" · ")}</div>
+            <div className="text-xs text-muted">
+              Glyphs {recap.glyphs.map((g) => g.toUpperCase()).join(" · ")}
+            </div>
           )}
         </Panel>
       )}
@@ -1259,9 +1322,7 @@ function GameOverCard() {
           Watch ad to continue
         </Btn>
       )}
-      {canPatch && (
-        <Btn onClick={() => getEngine()?.corePatch()}>Emergency patch (80 scrap)</Btn>
-      )}
+      {canPatch && <Btn onClick={() => getEngine()?.corePatch()}>Emergency patch (80 scrap)</Btn>}
       <Btn variant="primary" onClick={() => getEngine()?.retry()}>
         Retry
       </Btn>
@@ -1288,10 +1349,7 @@ function ToastStack({
   return (
     <div className="pointer-events-none absolute right-1 top-1 z-20 flex w-44 flex-col gap-1 pt-[env(safe-area-inset-top)]">
       {toasts.map((t) => (
-        <div
-          key={t.id}
-          className="pointer-events-auto flex items-start gap-1.5 rounded px-2 py-1"
-        >
+        <div key={t.id} className="pointer-events-auto flex items-start gap-1.5 rounded px-2 py-1">
           <div className="flex-1">
             <div className="text-xs font-medium">{t.title}</div>
             <div className="text-[10px] text-muted">{t.detail}</div>
