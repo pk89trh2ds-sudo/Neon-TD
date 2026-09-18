@@ -23,7 +23,7 @@ import { IN_RUN, inRunAtCap, inRunCost } from "./workshop.ts";
 describe("endlessScaling", () => {
   it("is monotonically non-decreasing", () => {
     let prev = 0;
-    for (let w = 1; w <= 300; w++) {
+    for (let w = 1; w <= 5000; w++) {
       const v = endlessScaling(w);
       assert.ok(v >= prev, `wave ${w}: ${v} should be >= previous ${prev}`);
       prev = v;
@@ -36,32 +36,39 @@ describe("endlessScaling", () => {
     assert.ok(endlessScaling(25) < 3, `wave 25 scaling was ${endlessScaling(25)}`);
   });
 
-  it("is meaningfully steeper than the pre-rebalance curve by wave 100", () => {
-    const oldScaling = (wave: number) => {
-      const early = 1 + Math.log(Math.max(wave, 1)) * 0.48;
-      const late = wave <= 40 ? 0 : Math.pow((wave - 40) / 16, 1.28);
-      return early + late;
-    };
-    assert.ok(
-      endlessScaling(100) > oldScaling(100) * 1.5,
-      `new ${endlessScaling(100)} vs old ${oldScaling(100)}`,
-    );
-    assert.ok(
-      endlessScaling(200) > oldScaling(200) * 1.5,
-      `new ${endlessScaling(200)} vs old ${oldScaling(200)}`,
-    );
+  it("fresh target: wave 100 stays low (retuned for 5000-wave ceiling)", () => {
+    // New curve is gentler at wave 100 by design — the late-game stretch
+    // means wave 100 is NOT the challenge it used to be; fresh runs die from
+    // under-investment, not an aggressive early curve.
+    assert.ok(endlessScaling(100) < 10, `wave 100 scaling was ${endlessScaling(100)}`);
+  });
+
+  it("moderate target: wave 1000 is significantly harder than wave 100", () => {
+    const at100 = endlessScaling(100);
+    const at1000 = endlessScaling(1000);
+    assert.ok(at1000 > at100 * 2, `wave 1000 (${at1000.toFixed(2)}) should be >2x wave 100 (${at100.toFixed(2)})`);
+  });
+
+  it("deep target: wave 5000 is dramatically harder than wave 1000 (surge phase)", () => {
+    const at1000 = endlessScaling(1000);
+    const at5000 = endlessScaling(5000);
+    assert.ok(at5000 > at1000 * 5, `wave 5000 (${at5000.toFixed(2)}) should be >5x wave 1000 (${at1000.toFixed(2)})`);
   });
 });
 
 describe("bossHealthMultiplier", () => {
-  it("grows in steps every 10 waves and never shrinks", () => {
-    assert.equal(bossHealthMultiplier(10), 1.15);
-    assert.equal(bossHealthMultiplier(19), 1.15);
-    assert.equal(bossHealthMultiplier(20), 1.3);
+  it("grows in steps every 10 waves, never shrinks, and caps at +6x", () => {
+    // New formula: 1 + min(6, floor(wave/10) * 0.05)
+    assert.equal(bossHealthMultiplier(10), 1.05);
+    assert.equal(bossHealthMultiplier(19), 1.05);
+    assert.equal(bossHealthMultiplier(20), 1.10);
+    // Cap: floor(1200/10)*0.05 = 6.0 → min(6,6) → 7.0; stays there
+    assert.equal(bossHealthMultiplier(1200), 7.0);
+    assert.equal(bossHealthMultiplier(5000), 7.0);
     let prev = 0;
-    for (let w = 0; w <= 300; w++) {
+    for (let w = 0; w <= 1500; w++) {
       const v = bossHealthMultiplier(w);
-      assert.ok(v >= prev);
+      assert.ok(v >= prev, `wave ${w}: ${v} < prev ${prev}`);
       prev = v;
     }
   });
@@ -75,8 +82,8 @@ describe("boss waves are harder than the wave they replace", () => {
     );
   }
 
-  it("every %10 wave from 10 to 250 has more total HP than the wave before it", () => {
-    for (let wave = 10; wave <= 250; wave += 10) {
+  it("every %10 wave from 10 to 5000 has more total HP than the wave before it", () => {
+    for (let wave = 10; wave <= 5000; wave += 10) {
       const bossTotal = waveTotalHealth(wave, "normal");
       const priorTotal = waveTotalHealth(wave - 1, "normal");
       assert.ok(
@@ -159,7 +166,7 @@ describe("difficultyUnlocked", () => {
 
   it("each tier gates on the immediately preceding tier's record", () => {
     const p = defaultProfile();
-    p.highestByDifficulty = { normal: 100, hard: 100 };
+    p.highestByDifficulty = { normal: DIFFICULTY_UNLOCK_WAVE, hard: DIFFICULTY_UNLOCK_WAVE };
     assert.equal(difficultyUnlocked(p, "nightmare"), true);
     assert.equal(difficultyUnlocked(p, "insane"), false);
   });

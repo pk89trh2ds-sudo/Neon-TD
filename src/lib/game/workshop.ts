@@ -2,7 +2,18 @@
 // directly for balance.test.ts — see the matching note in sim.ts.
 import { workshopRank, type InRunId, type PlayerProfile, type WorkshopId } from "./types.ts";
 
-export const IN_RUN_IDS: InRunId[] = ["dmg", "rng", "rate", "bounty", "income", "repair"];
+export const IN_RUN_IDS: InRunId[] = [
+  "dmg",
+  "rng",
+  "rate",
+  "bounty",
+  "income",
+  "repair",
+  "defensePct",
+  "defenseFlat",
+  "critChance",
+  "critMult",
+];
 
 export const WORKSHOP: Record<
   WorkshopId,
