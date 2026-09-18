@@ -23,6 +23,7 @@ export function PlayHud() {
   const maxCore = useGame((s) => s.maxCore);
   const paused = useGame((s) => s.paused);
   const speed = useGame((s) => s.speed);
+  const maxSpeed = useGame((s) => s.maxSpeed);
   const selected = useGame((s) => s.selectedTower);
   const inspect = useGame((s) => s.inspectText);
   const selectedCoord = useGame((s) => s.selectedCoord);
@@ -70,7 +71,7 @@ export function PlayHud() {
           </button>
           <button
             className="grid size-11 place-items-center rounded-md text-muted"
-            onClick={() => getEngine()?.setSpeed(speed === 3 ? 1 : ((speed + 1) as 1 | 2 | 3))}
+            onClick={() => getEngine()?.setSpeed(speed >= maxSpeed ? 1 : speed + 0.5)}
             aria-label="Speed"
           >
             <FastForward className="size-4" />

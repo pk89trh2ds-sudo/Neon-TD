@@ -45,7 +45,8 @@ import { createIapCheckoutSession, getEntitlements } from "./entitlements-api";
 import { type IapProductKey } from "./iap-catalog";
 import { Renderer } from "./renderer";
 import { useGame } from "./store";
-import { buyWorkshop, IN_RUN, inRunAtCap, inRunCost } from "./workshop";
+import { buyWorkshop, gameSpeedMax, IN_RUN, inRunAtCap, inRunCost } from "./workshop";
+import { buyArsenal as doArsenalBuy } from "./arsenal";
 import {
   DIFFICULTY_MOD,
   MILESTONES,
@@ -65,6 +66,7 @@ import {
   rewardLabel,
   startingCore,
   startingScrap,
+  type ArsenalId,
   type ChassisKind,
   type DifficultyTier,
   type GamePhase,
@@ -96,7 +98,7 @@ export class GameEngine {
   selectedCoord: GridCoord | null = null;
   offers: UpgradeOffer[] = [];
   paused = false;
-  speed: 1 | 2 | 3 = 1;
+  speed: number = 1;
   seed = 1;
   rng = new SplitMix64(1);
   claimed = new Set<number>();
@@ -450,8 +452,9 @@ export class GameEngine {
     else getAdAdapter().gameplayStart();
   }
 
-  setSpeed(s: 1 | 2 | 3) {
-    this.speed = s;
+  setSpeed(s: number) {
+    const maxAllowed = gameSpeedMax(this.profile.workshop.gameSpeed ?? 0);
+    this.speed = Math.min(s, maxAllowed);
     this.syncHud();
   }
 
@@ -697,6 +700,8 @@ export class GameEngine {
     this.scrap += 100_000;
     this.profile.bankScrap += 100_000;
     this.profile.skillPoints += 999;
+    this.profile.coreShards += 100_000;
+    this.profile.arsenalTokens += 999;
     this.persistRun();
     this.afterMeta("Dev: resources granted");
   }
@@ -723,6 +728,13 @@ export class GameEngine {
     if (unlockSkill(this.profile, id)) {
       audio.play("claim");
       this.afterMeta("Protocol upgraded");
+    } else audio.play("deny");
+  }
+
+  buyArsenal(id: ArsenalId) {
+    if (doArsenalBuy(this.profile, id)) {
+      audio.play("claim");
+      this.afterMeta("Arsenal updated");
     } else audio.play("deny");
   }
 
@@ -1153,6 +1165,7 @@ export class GameEngine {
       () => this.rng.nextFloat(),
     );
     if (result.scrap) this.scrap += result.scrap;
+    if (result.coreShards) this.profile.coreShards += result.coreShards;
     if (result.coreHeal) {
       // Clamp to maxCore — no ratchet. The old `maxCore = max(maxCore,
       // coreHP)` right after the clamp undid the clamp on the very next
@@ -1196,7 +1209,10 @@ export class GameEngine {
           // relief wave.
           const bonus = 80 + this.wave * 2;
           this.scrap += bonus;
-          useGame.getState().toast("Boss down", `+${bonus} scrap`, "ok");
+          // Arsenal Tokens: 1 per boss, +1 more every 50 waves
+          const tokens = 1 + Math.floor(this.wave / 50);
+          this.profile.arsenalTokens += tokens;
+          useGame.getState().toast("Boss down", `+${bonus} scrap · +${tokens} Arsenal Token${tokens > 1 ? "s" : ""}`, "ok");
         }
       }
       if (ev.t === "leak") {
@@ -1359,6 +1375,7 @@ export class GameEngine {
   }
 
   private refreshMods() {
+    const ws = this.profile.workshop;
     const run = {
       damage:
         damageBonus(this.profile) +
@@ -1376,6 +1393,11 @@ export class GameEngine {
         (this.inRun.bounty ?? 0) * IN_RUN.bounty.step,
     };
     const { mods, cipher } = loadoutMods(this.profile, run);
+    // Workshop permanent mitigation stats
+    mods.corePct += (ws.defensePct ?? 0) * 0.00064 + (this.inRun.defensePct ?? 0) * IN_RUN.defensePct.step;
+    mods.coreFlat += (ws.defenseFlat ?? 0) * 0.3 + (this.inRun.defenseFlat ?? 0) * IN_RUN.defenseFlat.step;
+    mods.critChance += (ws.critChance ?? 0) * 0.00027 + (this.inRun.critChance ?? 0) * IN_RUN.critChance.step;
+    mods.critMult += (ws.critMult ?? 0) * 0.00027 + (this.inRun.critMult ?? 0) * IN_RUN.critMult.step;
     this.mods = mods;
     this.cipherName = cipher?.name ?? null;
   }
@@ -1497,10 +1519,13 @@ export class GameEngine {
       wave: this.wave,
       scrap: this.scrap,
       bankScrap: this.profile.bankScrap,
+      coreShards: this.profile.coreShards,
+      arsenalTokens: this.profile.arsenalTokens,
       coreHP: this.coreHP,
       maxCore: this.maxCore,
       paused: this.paused,
       speed: this.speed,
+      maxSpeed: gameSpeedMax(this.profile.workshop.gameSpeed ?? 0),
       selectedTower: this.selectedTower,
       selectedCoord: this.selectedCoord,
       eventLog: this.eventLog,
