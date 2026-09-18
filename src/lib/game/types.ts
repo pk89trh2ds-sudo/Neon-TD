@@ -34,8 +34,26 @@ export type WorkshopId =
   | "coins"
   | "range"
   | "cooldown"
-  | "drop";
-export type InRunId = "dmg" | "rng" | "rate" | "bounty" | "repair" | "income";
+  | "drop"
+  | "defensePct"
+  | "defenseFlat"
+  | "critChance"
+  | "critMult"
+  | "gameSpeed";
+export type InRunId =
+  | "dmg"
+  | "rng"
+  | "rate"
+  | "bounty"
+  | "repair"
+  | "income"
+  | "defensePct"
+  | "defenseFlat"
+  | "critChance"
+  | "critMult";
+/** New unlockable Lab "Arsenal" entries — drones/special attacks. Unlocked
+ *  with arsenalTokens (one-time), leveled with coreShards (see arsenal.ts). */
+export type ArsenalId = "sentryDrone" | "empPulse" | "repairDrone" | "elementalDrone";
 export type GlyphId =
   | "spark"
   | "ion"
