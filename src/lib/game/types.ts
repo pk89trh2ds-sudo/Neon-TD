@@ -128,6 +128,7 @@ export type ProjectileState = {
   kind: TowerKind;
   travel: number;
   splash: boolean;
+  crit: boolean;
 };
 
 export type UpgradeEffect =
@@ -313,7 +314,8 @@ export type SimEvent =
   | { t: "hit"; x: number; y: number; dmg: number; kind: TowerKind }
   | { t: "kill"; x: number; y: number; kind: EnemyKind }
   | { t: "leak"; kind: EnemyKind; dmg: number }
-  | { t: "execute"; x: number; y: number };
+  | { t: "execute"; x: number; y: number }
+  | { t: "crit"; x: number; y: number };
 
 export const DIFFICULTIES: DifficultyTier[] = ["normal", "hard", "nightmare", "insane"];
 export const ENEMY_KINDS: EnemyKind[] = ["bit", "virus", "tank", "boss"];
