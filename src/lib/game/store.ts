@@ -45,9 +45,14 @@ export type GameStore = {
   endless: boolean;
   inRun: Partial<Record<InRunId, number>>;
   cipherName: string | null;
-  labOpen: boolean;
+  upgradesOpen: boolean;
   recap: RunRecap | null;
   entitlements: string[];
+  /** True while at least one boss enemy is alive on the field — drives the
+   *  HUD boss health bar (see PlayHud in app.tsx). */
+  bossActive: boolean;
+  /** Aggregate remaining-HP fraction across all alive bosses (1 = full). */
+  bossHpFrac: number;
   hydrate: (p: PlayerProfile, hasRun: boolean, extras: { comeback: boolean; crateReady: boolean }) => void;
   patch: (partial: Partial<GameStore>) => void;
   toast: (title: string, detail: string, tone?: Toast["tone"]) => void;
@@ -88,9 +93,11 @@ export const useGame = create<GameStore>((set) => ({
   endless: true,
   inRun: {},
   cipherName: null,
-  labOpen: false,
+  upgradesOpen: false,
   recap: null,
   entitlements: [],
+  bossActive: false,
+  bossHpFrac: 1,
   hydrate: (p, hasRun, extras) =>
     set({
       ready: true,

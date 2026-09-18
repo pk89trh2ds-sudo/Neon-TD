@@ -89,7 +89,12 @@ export function loadProfile(): PlayerProfile {
       safeParse<Persisted>(localStorage.getItem(SAVE_KEY_LEGACY));
     const base = defaultProfile();
     if (!data) return base;
-    const tamperFlag = !!data.checksum && !verifyChecksum(data);
+    // devUnlockAll is OR'd in permanently (not just checked live) so dev-mode
+    // testing can never leak into analytics or the daily leaderboard even
+    // after the toggle is switched back off — same exclusion path as a
+    // hand-edited save, see track() in engine.ts and settleRun's leaderboard
+    // gate.
+    const tamperFlag = (!!data.checksum && !verifyChecksum(data)) || !!data.devUnlockAll;
     const merged: PlayerProfile = {
       ...base,
       ...data,
@@ -139,7 +144,7 @@ export function importProfileJson(raw: string): PlayerProfile | null {
   const data = safeParse<Persisted>(raw);
   if (!data || typeof data !== "object") return null;
   const base = defaultProfile();
-  const tamperFlag = !!data.checksum && !verifyChecksum(data);
+  const tamperFlag = (!!data.checksum && !verifyChecksum(data)) || !!data.devUnlockAll;
   return {
     ...base,
     ...data,
@@ -444,7 +449,7 @@ export function shopForDay(day: string): ShopItem[] {
     {
       id: "rare",
       title: "Rare overclock",
-      detail: "Token for the next upgrade bay",
+      detail: "Token for the next Upgrades offer",
       cost: 220,
       kind: "rare",
     },

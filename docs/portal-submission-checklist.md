@@ -32,7 +32,7 @@ that's a genuine failure and shouldn't be ignored.
 - **Longer description (draft — adjust to each portal's tone/length limits):**
   > NEON TD is an endless tower-defense roguelite. Deploy four node types —
   > Pulse, Beam, Nova, Tesla — along a shifting neon circuit, bank scrap into
-  > permanent Workshop upgrades, socket glyphs into Cipher Words for combat
+  > permanent Lab upgrades, socket glyphs into Cipher Words for combat
   > bonuses, and climb an endless wave count across four difficulty tiers.
   > Daily missions, a login streak, and a free battle pass keep every night's
   > run building toward the next unlock.
