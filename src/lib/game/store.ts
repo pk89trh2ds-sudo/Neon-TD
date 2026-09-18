@@ -23,7 +23,10 @@ export type GameStore = {
   coreHP: number;
   maxCore: number;
   paused: boolean;
-  speed: 1 | 2 | 3;
+  speed: number;
+  maxSpeed: number;
+  coreShards: number;
+  arsenalTokens: number;
   selectedTower: TowerKind;
   selectedCoord: GridCoord | null;
   eventLog: string;
@@ -72,6 +75,9 @@ export const useGame = create<GameStore>((set) => ({
   maxCore: 20,
   paused: false,
   speed: 1,
+  maxSpeed: 1,
+  coreShards: 0,
+  arsenalTokens: 0,
   selectedTower: "pulse",
   selectedCoord: null,
   eventLog: "Ready.",
@@ -104,6 +110,8 @@ export const useGame = create<GameStore>((set) => ({
       screen: "boot",
       profile: p,
       bankScrap: p.bankScrap,
+      coreShards: p.coreShards,
+      arsenalTokens: p.arsenalTokens,
       pulls: p.inventoryPulls,
       skillPoints: p.skillPoints,
       pendingRare: p.pendingRareUpgrades,

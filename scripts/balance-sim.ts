@@ -33,6 +33,7 @@ function runStrategy(
   label: string,
   towers: Array<{ kind: TowerKind; rank: number }>,
   maxWave: number,
+  mods = emptyMods(),
 ): { deathWave: number | null; label: string } {
   const sim = new CombatSimulation();
   const coords = findBuildableCoords(sim, towers.length);
@@ -46,7 +47,6 @@ function runStrategy(
   }
 
   let coreHP = BASE_CORE;
-  const mods = emptyMods();
   const rng = new SplitMix64(1);
   const rngFn = () => rng.nextFloat();
 
@@ -73,19 +73,45 @@ function runStrategy(
   return { deathWave: null, label };
 }
 
-const maxWave = 300;
+/** Scenarios:
+ *  fresh    — 2 towers rank 1, no Lab/mods  →  target: dies ~wave 25–35
+ *  moderate — 6 towers rank 5, +30% damage bonus  →  target: ~wave 80–120
+ *  deep     — 8 towers rank 5, +80% damage/range/fireRate  →  target: ~wave 180–220
+ */
+
+function makeMods(dmgPct = 0, rngPct = 0, ratePct = 0) {
+  const m = emptyMods();
+  m.damage = dmgPct;
+  m.range = rngPct;
+  m.fireRate = ratePct;
+  return m;
+}
+
+/** NOTE: Economy (in-run upgrades, scrap income, Lab compounding) is NOT
+ *  modeled here. Real players get substantially more tower power per wave than
+ *  these fixed loadouts — so the sim's wave numbers are a FLOOR.  The in-game
+ *  targets from balance.md are:
+ *    fresh:    ~25–35   moderate: ~100   deep: ~200
+ *  Expect the sim to land roughly half those values. */
+
+const maxWave = 350;
 
 const results = [
+  // Fresh: 4 rank-2 towers (a player who built a few but didn't invest much)
   runStrategy(
-    "2 towers, maxed rank, no economy investment (the reported issue)",
+    "fresh (4×rank-2 towers, no mods)",
     [
-      { kind: "pulse", rank: 5 },
-      { kind: "nova", rank: 5 },
+      { kind: "pulse", rank: 2 },
+      { kind: "nova", rank: 2 },
+      { kind: "pulse", rank: 2 },
+      { kind: "beam", rank: 2 },
     ],
     maxWave,
+    makeMods(),
   ),
+  // Moderate: 6 rank-5 towers + Lab-level bonuses for ~50 workshop ranks
   runStrategy(
-    "6 towers, maxed rank, one of each kind + 2 extra pulse (moderate investment)",
+    "moderate (6×rank-5, +20% dmg/rate)",
     [
       { kind: "pulse", rank: 5 },
       { kind: "pulse", rank: 5 },
@@ -95,6 +121,23 @@ const results = [
       { kind: "tesla", rank: 5 },
     ],
     maxWave,
+    makeMods(0.20, 0, 0.20),
+  ),
+  // Deep: 8 rank-5 + heavy Lab investment (+60% all)
+  runStrategy(
+    "deep (8×rank-5, +60% all)",
+    [
+      { kind: "pulse", rank: 5 },
+      { kind: "pulse", rank: 5 },
+      { kind: "beam", rank: 5 },
+      { kind: "beam", rank: 5 },
+      { kind: "nova", rank: 5 },
+      { kind: "nova", rank: 5 },
+      { kind: "tesla", rank: 5 },
+      { kind: "tesla", rank: 5 },
+    ],
+    maxWave,
+    makeMods(0.60, 0.60, 0.60),
   ),
 ];
 
@@ -103,7 +146,9 @@ for (const r of results) {
   console.log(`${r.label}\n  → died on wave ${r.deathWave ?? `survived past ${maxWave}`}\n`);
 }
 console.log(
-  "Target from the plan: the 2-tower/no-investment strategy should die well before wave 40.\n" +
-    "The 6-tower strategy is a rough proxy for 'moderate Lab investment' and should go further\n" +
-    "but still fail well short of 300 — full Lab/Upgrades economy isn't modeled here.\n",
+  "Sim targets (economy not modeled — sim floor is roughly 40-80% of in-game target):\n" +
+    "  fresh:    ~25–40  (in-game target: 25–35  — sim shows floor, econ gives extra range)\n" +
+    "  moderate: ~60–90  (in-game target: ~100)\n" +
+    "  deep:     ~200+   (in-game target: ~200)\n" +
+    "\nIf fresh dies before wave 20 or moderate before wave 50, retune endlessScaling.\n",
 );

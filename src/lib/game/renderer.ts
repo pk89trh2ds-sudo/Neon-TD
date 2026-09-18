@@ -7,6 +7,12 @@ import {
   type CombatSimulation,
 } from "./sim";
 
+type ArsenalRenderState = {
+  sentryLevel: number;
+  elementalLevel: number;
+  empFlash: number;
+};
+
 type Particle = {
   x: number;
   y: number;
@@ -55,6 +61,7 @@ export class Renderer {
   shakeY = 0;
   trauma = 0;
   flash = 0;
+  empFlash = 0;
   hover: GridCoord | null = null;
   reduced = false;
   cell = 48;
@@ -117,6 +124,10 @@ export class Renderer {
     this.trauma = Math.min(1, this.trauma + v);
   }
 
+  flashEmp() {
+    this.empFlash = 1;
+  }
+
   burst(x: number, y: number, color: string, n = 10, speed = 40) {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -146,6 +157,7 @@ export class Renderer {
       paused: boolean;
       canPlace: boolean;
       mods: CombatMods;
+      arsenal?: ArsenalRenderState;
     },
   ) {
     this.time += dt;
@@ -158,6 +170,7 @@ export class Renderer {
     this.shakeX = this.reduced ? 0 : (Math.random() * 2 - 1) * shake * 10;
     this.shakeY = this.reduced ? 0 : (Math.random() * 2 - 1) * shake * 10;
     this.flash = Math.max(0, this.flash - dt * 3);
+    this.empFlash = Math.max(0, this.empFlash - dt * 4);
 
     ctx.fillStyle = "#07090e";
     ctx.fillRect(0, 0, w, h);
@@ -169,12 +182,17 @@ export class Renderer {
     this.drawEnemies(sim);
     this.drawProjectiles(sim);
     this.drawCore(sim);
+    if (opts.arsenal) this.drawDrones(sim, opts.arsenal);
     this.updateFx(dt);
 
     ctx.restore();
 
     if (this.flash > 0) {
       ctx.fillStyle = `rgba(255,77,109,${this.flash * 0.18})`;
+      ctx.fillRect(0, 0, w, h);
+    }
+    if (this.empFlash > 0) {
+      ctx.fillStyle = `rgba(100,180,255,${this.empFlash * 0.12})`;
       ctx.fillRect(0, 0, w, h);
     }
     const g = ctx.createRadialGradient(w / 2, h / 2, w * 0.2, w / 2, h / 2, w * 0.72);
@@ -362,6 +380,14 @@ export class Renderer {
         ctx.arc(x, y, size * 0.28, 0, Math.PI * 2);
         ctx.fill();
       }
+      if (e.slowUntil > sim.simTime) {
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = "#64b4ff";
+        ctx.beginPath();
+        ctx.arc(x, y, size * 0.32, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
       ctx.restore();
       const pct = Math.max(0, e.health / e.maxHealth);
       const bw = cell * 0.46;
@@ -452,6 +478,44 @@ export class Renderer {
       this.ctx.beginPath();
       this.ctx.arc(x, y, cell * 0.32, 0, Math.PI * 2);
       this.ctx.fill();
+    }
+  }
+
+  private drawDrones(sim: CombatSimulation, arsenal: ArsenalRenderState) {
+    const last = sim.map.path[sim.map.path.length - 1];
+    if (!last) return;
+    const ctx = this.ctx;
+    const cell = this.cell;
+    const cx = last.x * cell + cell / 2;
+    const cy = last.y * cell + cell / 2;
+    const r = cell * 0.85;
+    if (arsenal.sentryLevel > 0) {
+      const angle = this.time * 1.8;
+      const dx = Math.cos(angle) * r;
+      const dy = Math.sin(angle) * r;
+      ctx.save();
+      ctx.fillStyle = "#3ee8ff";
+      ctx.shadowColor = "#3ee8ff";
+      ctx.shadowBlur = 8;
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.arc(cx + dx, cy + dy, cell * 0.13, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    if (arsenal.elementalLevel > 0) {
+      const angle = this.time * 1.3 + Math.PI;
+      const dx = Math.cos(angle) * r;
+      const dy = Math.sin(angle) * r;
+      ctx.save();
+      ctx.fillStyle = "#a78bfa";
+      ctx.shadowColor = "#a78bfa";
+      ctx.shadowBlur = 8;
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.arc(cx + dx, cy + dy, cell * 0.13, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
   }
 

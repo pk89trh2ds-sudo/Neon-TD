@@ -189,6 +189,10 @@ export function addPartial(a: CombatMods, b: Partial<CombatMods>): CombatMods {
     execute: a.execute + (b.execute ?? 0),
     coreOnKill: a.coreOnKill + (b.coreOnKill ?? 0),
     corePerWave: a.corePerWave + (b.corePerWave ?? 0),
+    critChance: a.critChance + (b.critChance ?? 0),
+    critMult: a.critMult + (b.critMult ?? 0),
+    corePct: a.corePct + (b.corePct ?? 0),
+    coreFlat: a.coreFlat + (b.coreFlat ?? 0),
   };
 }
 
@@ -213,6 +217,10 @@ function addInto(a: CombatMods, b: Partial<CombatMods>) {
   a.execute += b.execute ?? 0;
   a.coreOnKill += b.coreOnKill ?? 0;
   a.corePerWave += b.corePerWave ?? 0;
+  a.critChance += b.critChance ?? 0;
+  a.critMult += b.critMult ?? 0;
+  a.corePct += b.corePct ?? 0;
+  a.coreFlat += b.coreFlat ?? 0;
 }
 
 export function loadoutMods(

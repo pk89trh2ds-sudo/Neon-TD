@@ -23,6 +23,7 @@ import {
   type UpgradeEffect,
   type UpgradeOffer,
 } from "./types.ts";
+import { ELEMENTAL_SLOW_FACTOR } from "./arsenal.ts";
 
 export class SplitMix64 {
   private state: number;
@@ -163,7 +164,7 @@ export function waveComposition(wave: number): Array<[EnemyKind, number]> {
     // every 30 waves instead of every 50.
     return (
       [
-        ["boss", 1 + Math.floor((wave - 10) / 30)],
+        ["boss", 1 + Math.min(19, Math.floor((wave - 10) / 30))],
         ["bit", bits],
         ["virus", viruses],
         ["tank", tanks],
@@ -182,6 +183,7 @@ export function waveComposition(wave: number): Array<[EnemyKind, number]> {
 export type CombatTickResult = {
   kills: EnemyKind[];
   scrap: number;
+  coreShards: number;
   coreDamage: number;
   coreHeal: number;
   events: SimEvent[];
@@ -194,6 +196,7 @@ export class CombatSimulation {
   projectiles: ProjectileState[] = [];
   spawnQueue: EnemyKind[] = [];
   spawnCooldown = 0;
+  simTime = 0;
   runDamageBonus = 0;
   runRangeBonus = 0;
   runFireRateBonus = 0;
@@ -327,9 +330,11 @@ export class CombatSimulation {
     rng: () => number,
   ): CombatTickResult {
     this.mods = mods;
+    this.simTime += dt;
     const result: CombatTickResult = {
       kills: [],
       scrap: 0,
+      coreShards: 0,
       coreDamage: 0,
       coreHeal: 0,
       events: [],
@@ -357,12 +362,14 @@ export class CombatSimulation {
       const pos = positionAlong(this.map, target.pathIndex);
       tower.facing = Math.atan2(pos.y - tower.coord.y, pos.x - tower.coord.x);
       tower.cooldown = Math.max(0.08, spec.fire / fireMult);
-      const dmg = spec.damage * tower.rank * dmgMult;
+      let dmg = spec.damage * tower.rank * dmgMult;
+      const isCrit = mods.critChance > 0 && rng() < mods.critChance;
+      if (isCrit) dmg *= 1.5 + mods.critMult;
       const splash =
         tower.kind === "nova" ||
         tower.kind === "tesla" ||
         (mods.splashConvert > 0 && rng() < mods.splashConvert);
-      this.fire(tower, target.id, dmg, splash);
+      this.fire(tower, target.id, dmg, splash, isCrit);
       result.events.push({
         t: "fire",
         kind: tower.kind,
@@ -392,14 +399,14 @@ export class CombatSimulation {
     const leak = DIFFICULTY_MOD[tier].leak;
     for (const enemy of this.enemies) {
       if (enemy.hitFlash > 0) enemy.hitFlash = Math.max(0, enemy.hitFlash - dt);
-      enemy.pathIndex += ENEMY[enemy.kind].speed * spd * waveSpeedMult * dt;
+      const slowFactor = enemy.slowUntil > this.simTime ? ELEMENTAL_SLOW_FACTOR : 1;
+      enemy.pathIndex += ENEMY[enemy.kind].speed * spd * waveSpeedMult * slowFactor * dt;
       if (enemy.pathIndex >= this.map.path.length - 1) {
         enemy.alive = false;
-        // Ceil instead of round: at leak=1.2/1.4 a round() silently discards
-        // the difficulty modifier for the two most common enemy kinds
-        // (round(1.2)=1, round(1.4)=1), so nightmare/insane's leak penalty
-        // did nothing for most leaks.
-        const dmg = Math.max(1, Math.ceil(ENEMY[enemy.kind].core * leak));
+        const raw = Math.ceil(ENEMY[enemy.kind].core * leak);
+        const afterPct = raw * (1 - Math.min(0.75, mods.corePct));
+        const afterFlat = afterPct - mods.coreFlat;
+        const dmg = Math.max(1, Math.ceil(afterFlat));
         result.coreDamage += dmg;
         result.events.push({ t: "leak", kind: enemy.kind, dmg });
       }
@@ -477,6 +484,7 @@ export class CombatSimulation {
       pathIndex: 0,
       alive: true,
       hitFlash: 0,
+      slowUntil: 0,
     });
   }
 
@@ -501,7 +509,7 @@ export class CombatSimulation {
     return best;
   }
 
-  private fire(tower: TowerState, targetId: number, damage: number, splash: boolean) {
+  private fire(tower: TowerState, targetId: number, damage: number, splash: boolean, crit = false) {
     this.projectiles.push({
       id: this.nextProjectileId++,
       ox: tower.coord.x,
@@ -511,6 +519,7 @@ export class CombatSimulation {
       kind: tower.kind,
       travel: 0,
       splash,
+      crit,
     });
   }
 
@@ -531,7 +540,7 @@ export class CombatSimulation {
   ) {
     const idx = this.enemies.findIndex((e) => e.id === shot.targetId && e.alive);
     if (idx < 0) return;
-    this.damageEnemy(idx, shot.damage, wave, tier, bounty, result, shot.kind, rng);
+    this.damageEnemy(idx, shot.damage, wave, tier, bounty, result, shot.kind, rng, shot.crit);
     if (!shot.splash) return;
     const source = this.enemies[idx];
     if (!source) return;
@@ -563,6 +572,7 @@ export class CombatSimulation {
         result,
         shot.kind,
         rng,
+        shot.crit,
       );
     }
   }
@@ -576,6 +586,7 @@ export class CombatSimulation {
     result: CombatTickResult,
     kind: TowerKind,
     rng: () => number,
+    crit = false,
   ) {
     const e = this.enemies[index]!;
     if (!e.alive) return;
@@ -583,6 +594,7 @@ export class CombatSimulation {
     e.hitFlash = 0.08;
     const pos = positionAlong(this.map, e.pathIndex);
     result.events.push({ t: "hit", x: pos.x, y: pos.y, dmg: amount, kind });
+    if (crit) result.events.push({ t: "crit", x: pos.x, y: pos.y });
     if (this.mods.execute > 0 && e.health > 0 && e.health / e.maxHealth <= this.mods.execute) {
       e.health = 0;
       result.events.push({ t: "execute", x: pos.x, y: pos.y });
@@ -591,6 +603,8 @@ export class CombatSimulation {
       e.alive = false;
       result.kills.push(e.kind);
       result.scrap += killBounty(e.kind, wave, tier, bounty);
+      // Core Shards drop: same kill-bounty path but at a lower rate (~15% of scrap)
+      result.coreShards += Math.max(0, Math.floor(killBounty(e.kind, wave, tier, 0) * 0.15));
       result.events.push({ t: "kill", x: pos.x, y: pos.y, kind: e.kind });
       if (this.mods.coreOnKill > 0 && rng() < this.mods.coreOnKill) {
         result.coreHeal += 1;

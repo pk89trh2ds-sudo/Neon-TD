@@ -67,6 +67,9 @@ function integritySummary(p: PlayerProfile): string {
     p.battlePassXP,
     JSON.stringify(p.battlePassClaimed ?? []),
     JSON.stringify(p.achievementsClaimed ?? []),
+    p.coreShards,
+    p.arsenalTokens,
+    JSON.stringify(p.arsenal ?? {}),
   ].join("|");
 }
 

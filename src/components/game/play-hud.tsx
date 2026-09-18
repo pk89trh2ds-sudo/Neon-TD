@@ -23,6 +23,7 @@ export function PlayHud() {
   const maxCore = useGame((s) => s.maxCore);
   const paused = useGame((s) => s.paused);
   const speed = useGame((s) => s.speed);
+  const maxSpeed = useGame((s) => s.maxSpeed);
   const selected = useGame((s) => s.selectedTower);
   const inspect = useGame((s) => s.inspectText);
   const selectedCoord = useGame((s) => s.selectedCoord);
@@ -69,9 +70,11 @@ export function PlayHud() {
             {paused ? <Play className="size-4" /> : <Pause className="size-4" />}
           </button>
           <button
-            className="grid size-11 place-items-center rounded-md text-muted"
-            onClick={() => getEngine()?.setSpeed(speed === 3 ? 1 : ((speed + 1) as 1 | 2 | 3))}
+            className="grid size-11 place-items-center rounded-md text-muted disabled:opacity-30"
+            disabled={maxSpeed <= 1}
+            onClick={() => getEngine()?.setSpeed(speed >= maxSpeed ? 1 : speed + 0.5)}
             aria-label="Speed"
+            title={maxSpeed <= 1 ? "Unlock speed in Lab" : undefined}
           >
             <FastForward className="size-4" />
           </button>
@@ -118,28 +121,38 @@ export function PlayHud() {
                 </div>
               </div>
             )}
-            <div className="grid grid-cols-3 gap-2">
-              {IN_RUN_IDS.map((id) => {
-                const spec = IN_RUN[id];
-                const bought = inRun[id] ?? 0;
-                const atCap = inRunAtCap(bought, id);
-                const cost = inRunCost(bought, id, wave);
-                return (
-                  <button
-                    key={id}
-                    onClick={() => getEngine()?.buyInRun(id)}
-                    disabled={atCap || scrap < cost}
-                    className="rounded-md border border-line bg-panel px-2 py-2 text-left disabled:opacity-40"
-                  >
-                    <div className="text-xs font-medium">{spec.label}</div>
-                    <div className="mt-0.5 text-[10px] leading-tight text-muted">{spec.detail}</div>
-                    <div className="mt-0.5 font-mono text-[11px] text-cyan">
-                      {atCap ? "maxed" : cost} · {id === "repair" ? "heal" : `x${bought}`}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+            {(["most", "lower"] as const).map((tier) => {
+              const tierIds = IN_RUN_IDS.filter((id) => IN_RUN[id].tier === tier);
+              return (
+                <div key={tier} className="flex flex-col gap-1.5">
+                  <div className="px-1 font-mono text-[10px] uppercase tracking-widest text-muted">
+                    {tier === "most" ? "Core" : "Advanced"}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {tierIds.map((id) => {
+                      const spec = IN_RUN[id];
+                      const bought = inRun[id] ?? 0;
+                      const atCap = inRunAtCap(bought, id);
+                      const cost = inRunCost(bought, id, wave);
+                      return (
+                        <button
+                          key={id}
+                          onClick={() => getEngine()?.buyInRun(id)}
+                          disabled={atCap || scrap < cost}
+                          className="rounded-md border border-line bg-panel px-2 py-2 text-left disabled:opacity-40"
+                        >
+                          <div className="text-xs font-medium">{spec.label}</div>
+                          <div className="mt-0.5 text-[10px] leading-tight text-muted">{spec.detail}</div>
+                          <div className="mt-0.5 font-mono text-[11px] text-cyan">
+                            {atCap ? "MAXED" : cost} · {id === "repair" ? "heal" : `x${bought}`}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
         {selectedCoord && (

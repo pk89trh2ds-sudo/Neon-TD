@@ -8,7 +8,17 @@
 import { useState } from "react";
 import { getEngine } from "@/lib/game/engine";
 import { CHASSIS, CIPHERS, GLYPH, prefixCipher, recipeHint } from "@/lib/game/ciphers";
-import { WORKSHOP, workshopCost } from "@/lib/game/workshop";
+import { WORKSHOP, workshopAtCap, workshopCost } from "@/lib/game/workshop";
+import {
+  ARSENAL_IDS,
+  ARSENAL_LABEL,
+  ARSENAL_DETAIL,
+  arsenalUnlocked,
+  arsenalLevel,
+  arsenalAtCap,
+  arsenalLevelCost,
+  arsenalUnlockCost,
+} from "@/lib/game/arsenal";
 import { useGame } from "@/lib/game/store";
 import {
   GLYPH_IDS,
@@ -17,6 +27,7 @@ import {
   SKILL_IDS,
   WORKSHOP_IDS,
   workshopRank,
+  type ArsenalId,
   type GlyphId,
   type ModuleId,
   type SkillId,
@@ -61,17 +72,23 @@ export function SkillsPane() {
 
 export function LabPane() {
   const p = useGame((s) => s.profile);
+  const coreShards = useGame((s) => s.coreShards);
+  const arsenalTokens = useGame((s) => s.arsenalTokens);
+  const mostIds = WORKSHOP_IDS.filter((id) => WORKSHOP[id].tier === "most");
+  const lowerIds = WORKSHOP_IDS.filter((id) => WORKSHOP[id].tier === "lower");
   return (
     <div className="flex flex-col gap-4 py-4">
       <Back />
       <h2 className="font-display text-3xl">Lab</h2>
       <p className="text-sm text-muted">
-        Permanent ranks. Bank coins from every run. Coins {p.bankScrap}
+        Permanent upgrades · Core Shards: {coreShards} · Coins: {p.bankScrap}
       </p>
-      {WORKSHOP_IDS.map((id) => {
+      <div className="text-xs uppercase tracking-widest text-muted">Core Upgrades</div>
+      {mostIds.map((id) => {
         const spec = WORKSHOP[id];
         const rank = workshopRank(p, id);
         const cost = workshopCost(p, id);
+        const capped = workshopAtCap(p, id);
         return (
           <Panel key={id} className="flex items-center justify-between gap-3">
             <div>
@@ -83,10 +100,60 @@ export function LabPane() {
             <Btn
               variant="primary"
               className="min-h-10"
-              disabled={p.bankScrap < cost}
+              disabled={capped || p.coreShards < cost}
               onClick={() => getEngine()?.buyWorkshopId(id)}
             >
-              {cost}
+              {capped ? "MAX" : `${cost} shards`}
+            </Btn>
+          </Panel>
+        );
+      })}
+      <div className="text-xs uppercase tracking-widest text-muted">Advanced</div>
+      {lowerIds.map((id) => {
+        const spec = WORKSHOP[id];
+        const rank = workshopRank(p, id);
+        const cost = workshopCost(p, id);
+        const capped = workshopAtCap(p, id);
+        return (
+          <Panel key={id} className="flex items-center justify-between gap-3">
+            <div>
+              <div className="font-medium">{spec.label}</div>
+              <div className="text-xs text-muted">
+                Lv {rank} · {spec.detail(rank)} · {spec.per}
+              </div>
+            </div>
+            <Btn
+              variant="primary"
+              className="min-h-10"
+              disabled={capped || p.coreShards < cost}
+              onClick={() => getEngine()?.buyWorkshopId(id)}
+            >
+              {capped ? "MAX" : `${cost} shards`}
+            </Btn>
+          </Panel>
+        );
+      })}
+      <div className="text-xs uppercase tracking-widest text-muted">Arsenal · {arsenalTokens} tokens</div>
+      {ARSENAL_IDS.map((id: ArsenalId) => {
+        const unlocked = arsenalUnlocked(p, id);
+        const lv = arsenalLevel(p, id);
+        const capped = arsenalAtCap(p, id);
+        const cost = unlocked ? arsenalLevelCost(p, id) : arsenalUnlockCost(id);
+        return (
+          <Panel key={id} className="flex items-center justify-between gap-3">
+            <div>
+              <div className="font-medium">{ARSENAL_LABEL[id]}</div>
+              <div className="text-xs text-muted">
+                {unlocked ? `Lv ${lv} · ` : ""}{ARSENAL_DETAIL[id]}
+              </div>
+            </div>
+            <Btn
+              variant="primary"
+              className="min-h-10"
+              disabled={capped || (!unlocked && p.arsenalTokens < cost) || (unlocked && p.coreShards < cost)}
+              onClick={() => getEngine()?.buyArsenal(id)}
+            >
+              {capped ? "MAX" : unlocked ? `${cost} shards` : `${cost} tokens`}
             </Btn>
           </Panel>
         );

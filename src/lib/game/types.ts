@@ -34,8 +34,26 @@ export type WorkshopId =
   | "coins"
   | "range"
   | "cooldown"
-  | "drop";
-export type InRunId = "dmg" | "rng" | "rate" | "bounty" | "repair" | "income";
+  | "drop"
+  | "defensePct"
+  | "defenseFlat"
+  | "critChance"
+  | "critMult"
+  | "gameSpeed";
+export type InRunId =
+  | "dmg"
+  | "rng"
+  | "rate"
+  | "bounty"
+  | "repair"
+  | "income"
+  | "defensePct"
+  | "defenseFlat"
+  | "critChance"
+  | "critMult";
+/** New unlockable Lab "Arsenal" entries — drones/special attacks. Unlocked
+ *  with arsenalTokens (one-time), leveled with coreShards (see arsenal.ts). */
+export type ArsenalId = "sentryDrone" | "empPulse" | "repairDrone" | "elementalDrone";
 export type GlyphId =
   | "spark"
   | "ion"
@@ -89,6 +107,8 @@ export type EnemyState = {
   pathIndex: number;
   alive: boolean;
   hitFlash: number;
+  /** Timestamp until which the elemental drone slow applies (sim time). */
+  slowUntil: number;
 };
 
 export type TowerState = {
@@ -110,6 +130,7 @@ export type ProjectileState = {
   kind: TowerKind;
   travel: number;
   splash: boolean;
+  crit: boolean;
 };
 
 export type UpgradeEffect =
@@ -195,6 +216,10 @@ export type CombatMods = {
   execute: number;
   coreOnKill: number;
   corePerWave: number;
+  critChance: number;
+  critMult: number;
+  corePct: number;
+  coreFlat: number;
 };
 
 export type PlayerProfile = {
@@ -220,6 +245,9 @@ export type PlayerProfile = {
   missions: DailyMission[];
   difficulty: DifficultyTier;
   bankScrap: number;
+  coreShards: number;
+  arsenalTokens: number;
+  arsenal: Partial<Record<ArsenalId, number>>;
   inventoryPulls: number;
   pendingRareUpgrades: number;
   loginStreak: number;
@@ -288,7 +316,8 @@ export type SimEvent =
   | { t: "hit"; x: number; y: number; dmg: number; kind: TowerKind }
   | { t: "kill"; x: number; y: number; kind: EnemyKind }
   | { t: "leak"; kind: EnemyKind; dmg: number }
-  | { t: "execute"; x: number; y: number };
+  | { t: "execute"; x: number; y: number }
+  | { t: "crit"; x: number; y: number };
 
 export const DIFFICULTIES: DifficultyTier[] = ["normal", "hard", "nightmare", "insane"];
 export const ENEMY_KINDS: EnemyKind[] = ["bit", "virus", "tank", "boss"];
@@ -314,8 +343,12 @@ export const WORKSHOP_IDS: WorkshopId[] = [
   "range",
   "cooldown",
   "drop",
+  "defensePct",
+  "defenseFlat",
+  "critChance",
+  "critMult",
+  "gameSpeed",
 ];
-export const IN_RUN_IDS: InRunId[] = ["dmg", "rng", "rate", "bounty", "income", "repair"];
 export const GLYPH_IDS: GlyphId[] = [
   "spark",
   "ion",
@@ -349,7 +382,7 @@ export const DIFFICULTY_MOD: Record<
  *  DIFFICULTIES unlocks index N). Chosen so a moderately-invested Lab build
  *  clears it and a fresh one doesn't — see endlessScaling below, tuned to
  *  the same target. */
-export const DIFFICULTY_UNLOCK_WAVE = 100;
+export const DIFFICULTY_UNLOCK_WAVE = 350;
 
 export const ENEMY: Record<
   EnemyKind,
@@ -486,27 +519,34 @@ export function emptyMods(): CombatMods {
     execute: 0,
     coreOnKill: 0,
     corePerWave: 0,
+    critChance: 0,
+    critMult: 0,
+    corePct: 0,
+    coreFlat: 0,
   };
 }
 
 /**
- * Steeper than the original (early log coefficient 0.48→0.55, late power
- * kicks in at wave 25 instead of 40 with exponent 1.28→1.42) so a run with
- * no permanent progression dies well before wave 40, while a heavily
- * invested Lab build can still push toward wave 200. See docs/balance.md
- * for the reasoning and the headless sim used to tune these constants.
+ * Retuned for a 5000-wave ceiling. Early log term unchanged (fresh runs die
+ * under wave 100 without investment). Late power term stretched horizontally
+ * (wave 30→240 denominator, exponent 1.25) so a moderately-invested build
+ * reaches 500–1000 and a deep build pushes past 5000. Surge staircase above
+ * wave 1000 adds non-linear spikes every 250 waves so late runs don't feel
+ * like a smooth grind. See docs/balance.md for tuning notes.
  */
 export function endlessScaling(wave: number): number {
   const early = 1 + Math.log(Math.max(wave, 1)) * 0.55;
-  const late = wave <= 25 ? 0 : Math.pow((wave - 25) / 13, 1.42);
-  return early + late;
+  const late = wave <= 30 ? 0 : Math.pow((wave - 30) / 240, 1.25);
+  const surge = wave <= 1000 ? 1 : 1 + Math.floor((wave - 1000) / 250) * 0.12;
+  return (early + late) * surge;
 }
 
 /** Extra HP multiplier stacked onto boss enemies only, on top of
  *  endlessScaling — bosses are meant to be a real spike, not the diluted
- *  wave they replace (see waveComposition in sim.ts). */
+ *  wave they replace (see waveComposition in sim.ts). Capped at +6x so
+ *  wave-5000 bosses don't become a per-tick performance bottleneck. */
 export function bossHealthMultiplier(wave: number): number {
-  return 1 + Math.floor(wave / 10) * 0.15;
+  return 1 + Math.min(6, Math.floor(wave / 10) * 0.05);
 }
 
 export function enemyHealth(kind: EnemyKind, wave: number, tier: DifficultyTier): number {
@@ -663,6 +703,9 @@ export function defaultProfile(): PlayerProfile {
     missions: [],
     difficulty: "normal",
     bankScrap: 0,
+    coreShards: 0,
+    arsenalTokens: 0,
+    arsenal: {},
     inventoryPulls: 0,
     pendingRareUpgrades: 0,
     loginStreak: 0,
