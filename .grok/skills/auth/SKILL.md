@@ -93,7 +93,7 @@ Do all of this — the routes alone render the disabled branch:
   `authClient.signOut()`: it leaves the preview bearer token attached to every
   later request, so the visitor stays signed in.
 - **Reading the user:** `useCurrentUser()` is display-only (`null` means
-  *loading OR signed out*, so never redirect on it alone); guard on
+  _loading OR signed out_, so never redirect on it alone); guard on
   `useCurrentUserState()`'s `isPending` instead. Gates (`SignedIn`, `SignedOut`,
   `RedirectToSignIn`, `UserButton`) live in `@/lib/auth/gates`. Skeleton/flicker
   rules and cookie-SSR for a zero-flash deployed first paint:

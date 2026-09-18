@@ -26,7 +26,10 @@ function sanitizeScoreInput(input: unknown): ScoreInput {
   if (!Number.isFinite(wave) || wave < 1 || wave > MAX_LEADERBOARD_WAVE) {
     throw new Error("Wave out of range");
   }
-  const displayName = String(v.displayName ?? "Operator").trim().slice(0, 24) || "Operator";
+  const displayName =
+    String(v.displayName ?? "Operator")
+      .trim()
+      .slice(0, 24) || "Operator";
   return { day, wave, displayName };
 }
 

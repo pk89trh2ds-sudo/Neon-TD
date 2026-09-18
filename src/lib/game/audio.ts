@@ -35,7 +35,9 @@ export class AudioEngine {
   sfxVol = 0.75;
 
   unlock() {
-    const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const AC =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!this.ctx) {
       this.ctx = new AC({ latencyHint: "interactive" });
       this.master = this.ctx.createGain();

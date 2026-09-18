@@ -23,6 +23,7 @@ Before pushing any change, run `npm run typecheck && npm run lint && npm run tes
 ## Stack
 
 This is a **standalone, revenue-ready game**, not a template project:
+
 - **React 19 + TanStack Start/Router** for the UI framework
 - **Zustand** for state management (`useGame`)
 - **Canvas2D** hand-rolled renderer (no external graphics lib — see `src/lib/game/renderer.ts`)
@@ -53,6 +54,7 @@ This is a **standalone, revenue-ready game**, not a template project:
 ### Build outputs
 
 After initial Grok scaffolding, the following are safe to remove or repurpose:
+
 - `server/middleware/grok-pwa.ts`, `scripts/grok-pwa-plugin.mjs` — Grok PWA + branding (can be deleted)
 - `<PreviewHostBridge />` in `src/routes/__root.tsx` — Grok live-preview (can be removed)
 - `public/__grok/`, `.grok/grok-branding/` — Grok assets (can be deleted; keep `.grok/app-env.json` for dev config)
@@ -63,6 +65,7 @@ After initial Grok scaffolding, the following are safe to remove or repurpose:
 Nitro (`serverDir: "./server"`) is only registered in `vite.config.ts` for
 `build`/`preview`/deploy, not for `npm run dev` (`vite dev`). So every raw
 HTTP endpoint is wired **twice**:
+
 1. A Nitro middleware under `server/middleware/*.ts` (build/preview/deploy).
 2. A matching Vite `configureServer` plugin in `vite.config.ts` (dev).
 
@@ -82,6 +85,7 @@ blocks importing anything from a `*.server.ts` file into client-reachable
 code — **even a `createServerFn` result that's meant to be called from the
 client** (it fails at runtime with a "Mocked import used in dev client"
 error, and the game engine silently fails to bind). So:
+
 - `createServerFn` definitions callable from the client: name the file
   **without** `.server.ts` (e.g. `src/lib/game/cloud-sync-api.ts`,
   `leaderboard-api.ts`, `entitlements-api.ts`).
@@ -189,10 +193,10 @@ The in-game vocabulary and the code's internal identifiers have
 renaming the internals, it would require a save migration for every
 existing player for zero user-visible benefit:
 
-| User-facing name | What it is | Internal identifiers (unchanged) |
-|---|---|---|
-| **"Lab"** | the **permanent**, out-of-run upgrade screen (meta-progression) | `Screen` enum value `"lab"`; but the profile field is still `profile.workshop`, and the type is still `WorkshopId` — these were NOT renamed |
-| **"Upgrades"** | the **in-run** shop/offers drawer (temporary, resets each run) | `engine.upgradesOpen` / `engine.toggleUpgrades()`, `store.ts`'s `upgradesOpen` field |
+| User-facing name | What it is                                                      | Internal identifiers (unchanged)                                                                                                            |
+| ---------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **"Lab"**        | the **permanent**, out-of-run upgrade screen (meta-progression) | `Screen` enum value `"lab"`; but the profile field is still `profile.workshop`, and the type is still `WorkshopId` — these were NOT renamed |
+| **"Upgrades"**   | the **in-run** shop/offers drawer (temporary, resets each run)  | `engine.upgradesOpen` / `engine.toggleUpgrades()`, `store.ts`'s `upgradesOpen` field                                                        |
 
 Before this rename, both screens used the word "Lab"/"Workshop"
 inconsistently and there was a third, separate always-visible floating
@@ -267,11 +271,11 @@ retuning numbers. Summary of the load-bearing pieces:
 - **Boss waves** (every 10th wave) are constructed by taking a **full
   ordinary wave's enemy composition and adding boss(es) on top**
   (`waveComposition()` in `sim.ts`) — never by substituting/reducing the
-  normal composition. That was the original bug (bosses were *weaker* than
+  normal composition. That was the original bug (bosses were _weaker_ than
   the wave before them); `balance.test.ts` asserts the
   boss-total-HP-exceeds-preceding-wave invariant across waves 10–250, so a
   regression there fails loudly.
-- **`effectiveRange(kind, mods)`** (`sim.ts`) is the *only* place tower
+- **`effectiveRange(kind, mods)`** (`sim.ts`) is the _only_ place tower
   range should be computed. Both the sim's own targeting logic and the
   renderer's range-ring visuals must call this — a static
   `TOWER[kind].range` lookup anywhere else is a bug (it was, once: the

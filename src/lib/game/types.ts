@@ -16,25 +16,9 @@ export type Screen =
 export type DifficultyTier = "normal" | "hard" | "nightmare" | "insane";
 export type EnemyKind = "bit" | "virus" | "tank" | "boss";
 export type TowerKind = "pulse" | "beam" | "nova" | "tesla";
-export type SkillId =
-  | "scrapCache"
-  | "coreShield"
-  | "overclock"
-  | "rangeAmp"
-  | "bountyProtocol";
-export type ModuleId =
-  | "focusingLens"
-  | "coolantLoop"
-  | "rippleCapacitor"
-  | "targetingAI";
-export type WorkshopId =
-  | "attack"
-  | "defense"
-  | "cash"
-  | "coins"
-  | "range"
-  | "cooldown"
-  | "drop";
+export type SkillId = "scrapCache" | "coreShield" | "overclock" | "rangeAmp" | "bountyProtocol";
+export type ModuleId = "focusingLens" | "coolantLoop" | "rippleCapacitor" | "targetingAI";
+export type WorkshopId = "attack" | "defense" | "cash" | "coins" | "range" | "cooldown" | "drop";
 export type InRunId = "dmg" | "rng" | "rate" | "bounty" | "repair" | "income";
 export type GlyphId =
   | "spark"
@@ -406,16 +390,19 @@ export const TOWER: Record<
   },
 };
 
-export const SKILL: Record<
-  SkillId,
-  { label: string; detail: string; max: number; cost: number }
-> = {
-  scrapCache: { label: "Scrap Cache", detail: "+25 starting scrap / rank", max: 5, cost: 1 },
-  coreShield: { label: "Core Shield", detail: "+4 core integrity / rank", max: 5, cost: 1 },
-  overclock: { label: "Overclock", detail: "+8% tower damage / rank", max: 5, cost: 2 },
-  rangeAmp: { label: "Range Amp", detail: "+6% tower range / rank", max: 5, cost: 2 },
-  bountyProtocol: { label: "Bounty Protocol", detail: "+10% kill bounty / rank", max: 5, cost: 2 },
-};
+export const SKILL: Record<SkillId, { label: string; detail: string; max: number; cost: number }> =
+  {
+    scrapCache: { label: "Scrap Cache", detail: "+25 starting scrap / rank", max: 5, cost: 1 },
+    coreShield: { label: "Core Shield", detail: "+4 core integrity / rank", max: 5, cost: 1 },
+    overclock: { label: "Overclock", detail: "+8% tower damage / rank", max: 5, cost: 2 },
+    rangeAmp: { label: "Range Amp", detail: "+6% tower range / rank", max: 5, cost: 2 },
+    bountyProtocol: {
+      label: "Bounty Protocol",
+      detail: "+10% kill bounty / rank",
+      max: 5,
+      cost: 2,
+    },
+  };
 
 export const MODULE: Record<ModuleId, { label: string; detail: string }> = {
   focusingLens: { label: "Focusing Lens", detail: "Towers deal +12% damage" },
@@ -545,15 +532,27 @@ export function startingScrap(p: PlayerProfile): number {
 }
 
 export function startingCore(p: PlayerProfile): number {
-  return BASE_CORE + skillRank(p, "coreShield") * 4 + workshopRank(p, "defense") + (p.nextRunCoreBonus || 0);
+  return (
+    BASE_CORE +
+    skillRank(p, "coreShield") * 4 +
+    workshopRank(p, "defense") +
+    (p.nextRunCoreBonus || 0)
+  );
 }
 
 export function damageBonus(p: PlayerProfile): number {
-  return skillRank(p, "overclock") * 0.08 + workshopRank(p, "attack") * 0.02 + p.prestigeLevel * 0.02 + (p.nextRunDamageBonus || 0);
+  return (
+    skillRank(p, "overclock") * 0.08 +
+    workshopRank(p, "attack") * 0.02 +
+    p.prestigeLevel * 0.02 +
+    (p.nextRunDamageBonus || 0)
+  );
 }
 
 export function rangeBonus(p: PlayerProfile): number {
-  return skillRank(p, "rangeAmp") * 0.06 + workshopRank(p, "range") * 0.015 + p.prestigeLevel * 0.01;
+  return (
+    skillRank(p, "rangeAmp") * 0.06 + workshopRank(p, "range") * 0.015 + p.prestigeLevel * 0.01
+  );
 }
 
 export function fireRateBonus(p: PlayerProfile): number {

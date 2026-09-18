@@ -53,7 +53,11 @@ export type GameStore = {
   bossActive: boolean;
   /** Aggregate remaining-HP fraction across all alive bosses (1 = full). */
   bossHpFrac: number;
-  hydrate: (p: PlayerProfile, hasRun: boolean, extras: { comeback: boolean; crateReady: boolean }) => void;
+  hydrate: (
+    p: PlayerProfile,
+    hasRun: boolean,
+    extras: { comeback: boolean; crateReady: boolean },
+  ) => void;
   patch: (partial: Partial<GameStore>) => void;
   toast: (title: string, detail: string, tone?: Toast["tone"]) => void;
   dismissToast: (id: number) => void;

@@ -28,17 +28,17 @@ sign-out (or any sign-out route/handler) for gate viewers.
 
 ## Files (pre-wired — do not edit)
 
-| File | Role |
-|---|---|
-| `gate-identity.server.ts` | Verifies the gate's `x-grok-identity` viewer JWT (EdDSA vs the gate JWKS; fail-closed). Server-only. |
-| `gate-session.server.ts` | Better Auth plugin that turns a verified gate identity into the app session with zero clicks. Already registered in `server.ts`. |
+| File                      | Role                                                                                                                             |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `gate-identity.server.ts` | Verifies the gate's `x-grok-identity` viewer JWT (EdDSA vs the gate JWKS; fail-closed). Server-only.                             |
+| `gate-session.server.ts`  | Better Auth plugin that turns a verified gate identity into the app session with zero clicks. Already registered in `server.ts`. |
 
 ## Env (deployer-injected)
 
-| Var | Scope | Meaning |
-|---|---|---|
-| `GROK_PROJECT_ID` | server | enables "Sign in with Grok" (`x-grok-identity` audience check `app:<project_id>`) |
-| `GROK_GATE_ORIGIN` | server | gate public origin (JWKS + issuer pin); unset → derived from the inbound host |
+| Var                | Scope  | Meaning                                                                           |
+| ------------------ | ------ | --------------------------------------------------------------------------------- |
+| `GROK_PROJECT_ID`  | server | enables "Sign in with Grok" (`x-grok-identity` audience check `app:<project_id>`) |
+| `GROK_GATE_ORIGIN` | server | gate public origin (JWKS + issuer pin); unset → derived from the inbound host     |
 
 Deployed behavior: gate-authenticated viewers are signed in automatically from
 `x-grok-identity`; the deployer also injects a per-app broker client +

@@ -28,13 +28,7 @@ export function Btn({
   );
 }
 
-export function Panel({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
+export function Panel({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div className={cn("rounded-xl border border-line bg-panel p-4", className)}>{children}</div>
   );

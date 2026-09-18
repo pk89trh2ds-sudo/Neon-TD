@@ -11,11 +11,7 @@
  */
 export type IapProductKey = "remove_ads" | "premium_pass_s1" | "starter_pack";
 
-export const IAP_PRODUCT_KEYS: IapProductKey[] = [
-  "remove_ads",
-  "premium_pass_s1",
-  "starter_pack",
-];
+export const IAP_PRODUCT_KEYS: IapProductKey[] = ["remove_ads", "premium_pass_s1", "starter_pack"];
 
 export const IAP_CATALOG: Record<
   IapProductKey,

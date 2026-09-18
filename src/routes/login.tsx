@@ -52,9 +52,7 @@ function LoginPage() {
         <h1 className="font-display text-4xl font-semibold tracking-[0.14em] text-ice">
           {mode === "signUp" ? "New callsign" : "Sign in"}
         </h1>
-        <p className="mt-1 text-sm text-muted">
-          Sync your save and streak across devices.
-        </p>
+        <p className="mt-1 text-sm text-muted">Sync your save and streak across devices.</p>
       </header>
 
       <Panel className="space-y-3">

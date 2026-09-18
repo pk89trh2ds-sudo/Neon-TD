@@ -26,14 +26,7 @@ import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const pgliteDist = join(root, "node_modules", "@electric-sql", "pglite", "dist");
-const targetDir = join(
-  root,
-  ".vercel",
-  "output",
-  "functions",
-  "__server.func",
-  "_libs",
-);
+const targetDir = join(root, ".vercel", "output", "functions", "__server.func", "_libs");
 
 if (!existsSync(targetDir)) {
   // Static/portal builds have no server function — nothing to patch.
@@ -46,9 +39,7 @@ if (!existsSync(pgliteDist)) {
 }
 
 const assetExtensions = [".wasm", ".data", ".tar.gz"];
-const files = readdirSync(pgliteDist).filter((f) =>
-  assetExtensions.some((ext) => f.endsWith(ext)),
-);
+const files = readdirSync(pgliteDist).filter((f) => assetExtensions.some((ext) => f.endsWith(ext)));
 
 if (files.length === 0) {
   console.error("[copy-pglite-assets] found zero WASM/data/tar.gz assets — PGLite's");
