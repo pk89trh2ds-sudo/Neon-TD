@@ -23,6 +23,7 @@ import {
   type UpgradeEffect,
   type UpgradeOffer,
 } from "./types.ts";
+import { ELEMENTAL_SLOW_FACTOR } from "./arsenal.ts";
 
 export class SplitMix64 {
   private state: number;
@@ -195,6 +196,7 @@ export class CombatSimulation {
   projectiles: ProjectileState[] = [];
   spawnQueue: EnemyKind[] = [];
   spawnCooldown = 0;
+  simTime = 0;
   runDamageBonus = 0;
   runRangeBonus = 0;
   runFireRateBonus = 0;
@@ -328,6 +330,7 @@ export class CombatSimulation {
     rng: () => number,
   ): CombatTickResult {
     this.mods = mods;
+    this.simTime += dt;
     const result: CombatTickResult = {
       kills: [],
       scrap: 0,
@@ -396,7 +399,8 @@ export class CombatSimulation {
     const leak = DIFFICULTY_MOD[tier].leak;
     for (const enemy of this.enemies) {
       if (enemy.hitFlash > 0) enemy.hitFlash = Math.max(0, enemy.hitFlash - dt);
-      enemy.pathIndex += ENEMY[enemy.kind].speed * spd * waveSpeedMult * dt;
+      const slowFactor = enemy.slowUntil > this.simTime ? ELEMENTAL_SLOW_FACTOR : 1;
+      enemy.pathIndex += ENEMY[enemy.kind].speed * spd * waveSpeedMult * slowFactor * dt;
       if (enemy.pathIndex >= this.map.path.length - 1) {
         enemy.alive = false;
         const raw = Math.ceil(ENEMY[enemy.kind].core * leak);
@@ -480,6 +484,7 @@ export class CombatSimulation {
       pathIndex: 0,
       alive: true,
       hitFlash: 0,
+      slowUntil: 0,
     });
   }
 

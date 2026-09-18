@@ -107,6 +107,8 @@ export type EnemyState = {
   pathIndex: number;
   alive: boolean;
   hitFlash: number;
+  /** Timestamp until which the elemental drone slow applies (sim time). */
+  slowUntil: number;
 };
 
 export type TowerState = {
