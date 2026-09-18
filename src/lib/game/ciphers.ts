@@ -1,3 +1,5 @@
+// Extension included so `node --experimental-strip-types` can resolve this
+// directly for meta.test.ts — see the matching note in sim.ts.
 import {
   emptyMods,
   type ChassisInstance,
@@ -6,7 +8,7 @@ import {
   type CombatMods,
   type GlyphId,
   type PlayerProfile,
-} from "./types";
+} from "./types.ts";
 
 export const CHASSIS: Record<
   ChassisKind,

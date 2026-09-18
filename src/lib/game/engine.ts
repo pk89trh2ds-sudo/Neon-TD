@@ -53,10 +53,12 @@ import {
   TOWER,
   coinBonus,
   damageBonus,
+  difficultyUnlocked,
   dropBonus,
   emptyChassis,
   emptyMods,
   fireRateBonus,
+  highestUnlockedDifficulty,
   rangeBonus,
   bountyBonus,
   dayStamp,
@@ -296,7 +298,12 @@ export class GameEngine {
 
   startGame(difficulty?: DifficultyTier, seedOverride?: number) {
     audio.unlock();
-    this.profile.difficulty = difficulty ?? this.profile.difficulty;
+    const requested = difficulty ?? this.profile.difficulty;
+    // Never start a run on a tier this profile hasn't unlocked. loadProfile
+    // clamps the stored value on load; this covers a tier passed in directly.
+    this.profile.difficulty = difficultyUnlocked(this.profile, requested)
+      ? requested
+      : highestUnlockedDifficulty(this.profile);
     this.sim.resetRun();
     this.seed = seedOverride ?? ((Math.random() * 0xffffffff) >>> 0 || 1);
     this.rng = new SplitMix64(this.seed);
@@ -368,7 +375,11 @@ export class GameEngine {
     this.rng = new SplitMix64(this.seed);
     this.wave = Math.max(1, snap.wave);
     this.coreHP = Math.max(1, snap.coreHP);
-    this.maxCore = Math.max(this.coreHP, startingCore(this.profile));
+    // Prefer the saved max — Patch purchases (the only in-run max-core sink)
+    // live only here now that heals clamp instead of ratcheting maxCore up,
+    // so rebuilding it from startingCore() alone silently refunded nothing
+    // and destroyed every point of max core bought above current HP.
+    this.maxCore = Math.max(snap.maxCore ?? 0, this.coreHP, startingCore(this.profile));
     this.scrap = Math.max(0, snap.scrap);
     this.claimed = new Set(snap.claimedMilestones);
     this.endless = snap.isEndlessUnlocked;
@@ -670,6 +681,12 @@ export class GameEngine {
   }
 
   setDifficulty(d: DifficultyTier) {
+    // The picker already disables locked tiers; this is the backstop so a
+    // locked tier can't be selected through any other path.
+    if (!difficultyUnlocked(this.profile, d)) {
+      audio.play("deny");
+      return;
+    }
     this.profile.difficulty = d;
     this.flushProfile();
     this.syncHud();
@@ -683,17 +700,40 @@ export class GameEngine {
   }
 
   // --- Hidden dev mode (7 taps on the Settings version string) -----------
-  // Testing-only. Reaching devUnlockAll=true permanently tamper-flags the
-  // profile (see meta.ts loadProfile/importProfileJson) so it can never
-  // submit to the shared daily leaderboard or count in analytics, even
-  // after the toggle is switched back off.
+  // Testing-only. Every dev grant routes through markDevUsed() below, which
+  // is the single taint point: it must never be possible to take a dev
+  // grant and still submit to the shared daily leaderboard or count in
+  // analytics — see the Constraints section of CLAUDE.md.
+
+  /**
+   * Taints the save the moment any dev grant is taken.
+   *
+   * Sets BOTH fields deliberately:
+   *  - `tamperFlag` takes effect immediately, in this session. Deriving it
+   *    only in loadProfile() (as this used to) meant a tester could enable
+   *    dev mode, grant themselves 100k scrap and play the daily challenge
+   *    without reloading — `settleRun()`'s `!tamperFlag` leaderboard gate
+   *    and `track()`'s analytics gate both still saw a clean profile.
+   *  - `devUnlockAll` is the *persisted* marker loadProfile/importProfileJson
+   *    re-derive `tamperFlag` from, so the taint survives a reload (a plain
+   *    `tamperFlag` is recomputed on load, not read back from the save).
+   *
+   * Granting resources therefore also unlocks the difficulties, which is the
+   * honest reading of "this save used dev mode" rather than two separate
+   * exclusion mechanisms.
+   */
+  private markDevUsed() {
+    this.profile.devUnlockAll = true;
+    this.profile.tamperFlag = true;
+  }
 
   devUnlockAll() {
-    this.profile.devUnlockAll = true;
+    this.markDevUsed();
     this.afterMeta("Dev: all difficulties unlocked");
   }
 
   devGrantResources() {
+    this.markDevUsed();
     this.scrap += 100_000;
     this.profile.bankScrap += 100_000;
     this.profile.skillPoints += 999;
@@ -1336,6 +1376,7 @@ export class GameEngine {
       wave: this.wave,
       phase: this.phase,
       coreHP: this.coreHP,
+      maxCore: this.maxCore,
       scrap: this.scrap,
       claimedMilestones: [...this.claimed],
       isEndlessUnlocked: this.endless,

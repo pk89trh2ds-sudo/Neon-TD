@@ -267,6 +267,12 @@ export type RunSnapshot = {
   wave: number;
   phase: GamePhase;
   coreHP: number;
+  /** Max core integrity at save time. Optional so snapshots written by an
+   *  older build of the same SCHEMA still load (continueRun falls back to
+   *  startingCore). Needed because `repair`/Patch is the only in-run way to
+   *  raise max core and heals no longer ratchet it back up — without this,
+   *  resuming a run destroyed every Patch bought above current HP. */
+  maxCore?: number;
   scrap: number;
   claimedMilestones: number[];
   isEndlessUnlocked: boolean;
@@ -591,6 +597,24 @@ export function difficultyUnlocked(p: PlayerProfile, d: DifficultyTier): boolean
 export function previousDifficulty(d: DifficultyTier): DifficultyTier | null {
   const idx = DIFFICULTIES.indexOf(d);
   return idx > 0 ? DIFFICULTIES[idx - 1]! : null;
+}
+
+/**
+ * Highest tier `p` currently has unlocked. Used to clamp a stored
+ * `profile.difficulty` that the unlock rules no longer permit.
+ *
+ * This matters for saves written before the gate changed from a global
+ * `highestWaveReached >= {0,15,30,50}` check to the per-tier
+ * `highestByDifficulty[prev] >= DIFFICULTY_UNLOCK_WAVE` one: a profile can
+ * legitimately be sitting on a tier it can no longer select, and nothing on
+ * the start path re-validates it.
+ */
+export function highestUnlockedDifficulty(p: PlayerProfile): DifficultyTier {
+  let best: DifficultyTier = DIFFICULTIES[0]!;
+  for (const d of DIFFICULTIES) {
+    if (difficultyUnlocked(p, d)) best = d;
+  }
+  return best;
 }
 
 export function rewardLabel(r: Reward): string {

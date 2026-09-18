@@ -198,7 +198,7 @@ export function PlayHud() {
             {tutorial === 2 &&
               "Hostiles leak into the vault if they finish the lane. Keep fire on the front."}
             {tutorial === 3 &&
-              "Wave clear. Upgrades appear on the right — tap to install while fighting."}
+              "Wave clear. Tap Upgrades, bottom left, to install offers while fighting."}
             <div className="mt-2 flex justify-end">
               <Btn
                 variant="quiet"
