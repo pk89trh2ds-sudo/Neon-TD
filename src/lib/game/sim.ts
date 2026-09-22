@@ -6,6 +6,7 @@ import {
   DIFFICULTY_MOD,
   ENEMY,
   MAX_RANK,
+  MAX_TOWERS,
   ROWS,
   TOWER,
   emptyMods,
@@ -20,8 +21,6 @@ import {
   type SimEvent,
   type TowerKind,
   type TowerState,
-  type UpgradeEffect,
-  type UpgradeOffer,
 } from "./types.ts";
 
 export class SplitMix64 {
@@ -195,14 +194,10 @@ export class CombatSimulation {
   spawnQueue: EnemyKind[] = [];
   spawnCooldown = 0;
   runDamageBonus = 0;
-  runRangeBonus = 0;
-  runFireRateBonus = 0;
-  runBountyBonus = 0;
   private mods: CombatMods = emptyMods();
   private nextEnemyId = 1;
   private nextTowerId = 1;
   private nextProjectileId = 1;
-  private nextOfferId = 1;
 
   constructor(map: Battlefield = makeBattlefield()) {
     this.map = map;
@@ -219,9 +214,6 @@ export class CombatSimulation {
     this.resetCombatants();
     this.towers = [];
     this.runDamageBonus = 0;
-    this.runRangeBonus = 0;
-    this.runFireRateBonus = 0;
-    this.runBountyBonus = 0;
     this.nextEnemyId = 1;
     this.nextTowerId = 1;
     this.nextProjectileId = 1;
@@ -244,7 +236,15 @@ export class CombatSimulation {
 
   canPlace(coord: GridCoord): boolean {
     const k = keyOf(coord);
-    return this.map.buildable.has(k) && !this.towers.some((t) => keyOf(t.coord) === k);
+    return (
+      this.map.buildable.has(k) &&
+      !this.towers.some((t) => keyOf(t.coord) === k) &&
+      this.towers.length < MAX_TOWERS
+    );
+  }
+
+  get towerLimit(): number {
+    return MAX_TOWERS;
   }
 
   placeTower(kind: TowerKind, coord: GridCoord): boolean {
@@ -357,7 +357,10 @@ export class CombatSimulation {
       const pos = positionAlong(this.map, target.pathIndex);
       tower.facing = Math.atan2(pos.y - tower.coord.y, pos.x - tower.coord.x);
       tower.cooldown = Math.max(0.08, spec.fire / fireMult);
-      const dmg = spec.damage * tower.rank * dmgMult;
+      // Crit: base 2× + critFactor on a successful crit roll
+      const isCrit = mods.critChance > 0 && rng() < mods.critChance;
+      const critMult = isCrit ? 2 + mods.critFactor : 1;
+      const dmg = spec.damage * tower.rank * dmgMult * critMult;
       const splash =
         tower.kind === "nova" ||
         tower.kind === "tesla" ||
@@ -371,6 +374,19 @@ export class CombatSimulation {
         tx: pos.x,
         ty: pos.y,
       });
+      // Multishot: fire again at additional targets
+      if (mods.multishotChance > 0 && rng() < mods.multishotChance) {
+        const extraTargets = Math.round(mods.multishotTargets) || 1;
+        const fired = new Set<number>([target.id]);
+        for (let m = 0; m < extraTargets; m++) {
+          const extra = this.selectTargetExcluding(tower.coord, range, preferHighest, fired);
+          if (!extra) break;
+          fired.add(extra.id);
+          const isCrit2 = mods.critChance > 0 && rng() < mods.critChance;
+          const dmg2 = spec.damage * tower.rank * dmgMult * (isCrit2 ? 2 + mods.critFactor : 1);
+          this.fire(tower, extra.id, dmg2, false);
+        }
+      }
     }
 
     const speed = (kind: TowerKind) => (kind === "beam" ? 14 : kind === "pulse" ? 9 : 7);
@@ -388,8 +404,9 @@ export class CombatSimulation {
     // Enemies pick up pace as waves climb (+0.4%/wave, capped +60% at wave
     // 150) — previously flat forever, so a wave-250 bit crossed the map at
     // the exact same speed as a wave-1 one.
-    const waveSpeedMult = 1 + Math.min(0.6, wave * 0.004);
+    const waveSpeedMult = (1 + Math.min(0.6, wave * 0.004)) * (1 - mods.slow);
     const leak = DIFFICULTY_MOD[tier].leak;
+    const dr = Math.min(0.8, mods.damageReduction);
     for (const enemy of this.enemies) {
       if (enemy.hitFlash > 0) enemy.hitFlash = Math.max(0, enemy.hitFlash - dt);
       enemy.pathIndex += ENEMY[enemy.kind].speed * spd * waveSpeedMult * dt;
@@ -399,7 +416,8 @@ export class CombatSimulation {
         // the difficulty modifier for the two most common enemy kinds
         // (round(1.2)=1, round(1.4)=1), so nightmare/insane's leak penalty
         // did nothing for most leaks.
-        const dmg = Math.max(1, Math.ceil(ENEMY[enemy.kind].core * leak));
+        const baseDmg = Math.max(1, Math.ceil(ENEMY[enemy.kind].core * leak));
+        const dmg = Math.max(1, Math.ceil(baseDmg * (1 - dr)));
         result.coreDamage += dmg;
         result.events.push({ t: "leak", kind: enemy.kind, dmg });
       }
@@ -408,64 +426,6 @@ export class CombatSimulation {
     return result;
   }
 
-  makeOffers(wave: number, rng: SplitMix64): UpgradeOffer[] {
-    const catalog: Array<[string, string, number, UpgradeEffect]> = [
-      ["Overload", "+12% tower damage this run", 50, { type: "damage", v: 0.12 }],
-      ["Longscan", "+10% tower range this run", 45, { type: "range", v: 0.1 }],
-      ["Coolant", "+15% fire rate this run", 55, { type: "fireRate", v: 0.15 }],
-      ["Patch Core", "+5 core integrity", 40, { type: "core", v: 5 }],
-      ["Scrap Drop", "+40 scrap", 0, { type: "scrap", v: 40 }],
-    ];
-    const pool = [...catalog];
-    const offers: UpgradeOffer[] = [];
-    for (let i = 0; i < 3 && pool.length; i++) {
-      const idx = rng.next() % pool.length;
-      const item = pool.splice(idx, 1)[0]!;
-      offers.push({
-        id: this.nextOfferId++,
-        title: item[0],
-        detail: item[1],
-        cost: item[2] + wave,
-        apply: item[3],
-      });
-    }
-    return offers;
-  }
-
-  injectRareOffer(wave: number): UpgradeOffer {
-    return {
-      id: 9000 + wave,
-      title: "Rare Overclock",
-      detail: "+20% damage, +10% range, +10% fire rate",
-      cost: 0,
-      apply: { type: "rare" },
-    };
-  }
-
-  apply(effect: UpgradeEffect, coreHP: { v: number }, scrapGrant: (n: number) => void) {
-    switch (effect.type) {
-      case "damage":
-        this.runDamageBonus += effect.v;
-        break;
-      case "range":
-        this.runRangeBonus += effect.v;
-        break;
-      case "fireRate":
-        this.runFireRateBonus += effect.v;
-        break;
-      case "core":
-        coreHP.v += effect.v;
-        break;
-      case "scrap":
-        scrapGrant(effect.v);
-        break;
-      case "rare":
-        this.runDamageBonus += 0.2;
-        this.runRangeBonus += 0.1;
-        this.runFireRateBonus += 0.1;
-        break;
-    }
-  }
 
   private spawn(kind: EnemyKind, wave: number, tier: DifficultyTier) {
     const hp = enemyHealth(kind, wave, tier);
@@ -489,6 +449,28 @@ export class CombatSimulation {
     let best: EnemyState | null = null;
     for (const enemy of this.enemies) {
       if (!enemy.alive) continue;
+      const pos = positionAlong(this.map, enemy.pathIndex);
+      const dx = pos.x - coord.x;
+      const dy = pos.y - coord.y;
+      if (dx * dx + dy * dy > range2) continue;
+      if (!best) best = enemy;
+      else if (preferHighestHP) {
+        if (enemy.health > best.health) best = enemy;
+      } else if (enemy.pathIndex > best.pathIndex) best = enemy;
+    }
+    return best;
+  }
+
+  private selectTargetExcluding(
+    coord: GridCoord,
+    range: number,
+    preferHighestHP: boolean,
+    exclude: Set<number>,
+  ): EnemyState | null {
+    const range2 = range * range;
+    let best: EnemyState | null = null;
+    for (const enemy of this.enemies) {
+      if (!enemy.alive || exclude.has(enemy.id)) continue;
       const pos = positionAlong(this.map, enemy.pathIndex);
       const dx = pos.x - coord.x;
       const dy = pos.y - coord.y;
@@ -532,6 +514,30 @@ export class CombatSimulation {
     const idx = this.enemies.findIndex((e) => e.id === shot.targetId && e.alive);
     if (idx < 0) return;
     this.damageEnemy(idx, shot.damage, wave, tier, bounty, result, shot.kind, rng);
+    // Chain: arc to additional nearby targets (50% damage per hop)
+    const chainTargets = Math.round(this.mods.chain);
+    if (chainTargets > 0) {
+      const chained = new Set<number>([shot.targetId]);
+      let lastPos = positionAlong(this.map, this.enemies[idx]?.pathIndex ?? 0);
+      let chainDmg = shot.damage * 0.5;
+      for (let c = 0; c < chainTargets; c++) {
+        let nearest: { i: number; distSq: number } | null = null;
+        for (let j = 0; j < this.enemies.length; j++) {
+          const e = this.enemies[j]!;
+          if (!e.alive || chained.has(e.id)) continue;
+          const p = positionAlong(this.map, e.pathIndex);
+          const distSq = (p.x - lastPos.x) ** 2 + (p.y - lastPos.y) ** 2;
+          if (distSq <= (splashR * 2) ** 2 && (!nearest || distSq < nearest.distSq))
+            nearest = { i: j, distSq };
+        }
+        if (!nearest) break;
+        const ne = this.enemies[nearest.i]!;
+        chained.add(ne.id);
+        lastPos = positionAlong(this.map, ne.pathIndex);
+        this.damageEnemy(nearest.i, chainDmg, wave, tier, bounty, result, shot.kind, rng);
+        chainDmg *= 0.5;
+      }
+    }
     if (!shot.splash) return;
     const source = this.enemies[idx];
     if (!source) return;

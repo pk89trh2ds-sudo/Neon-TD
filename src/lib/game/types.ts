@@ -1,4 +1,4 @@
-export type GamePhase = "menu" | "combat" | "upgrade" | "gameOver";
+export type GamePhase = "menu" | "combat" | "gameOver";
 export type Screen =
   | "boot"
   | "menu"
@@ -35,7 +35,32 @@ export type WorkshopId =
   | "range"
   | "cooldown"
   | "drop";
-export type InRunId = "dmg" | "rng" | "rate" | "bounty" | "repair" | "income";
+export type InRunId =
+  // Offense
+  | "dmg"
+  | "rate"
+  | "rng"
+  | "critChance"
+  | "critFactor"
+  | "multishotChance"
+  | "multishotTargets"
+  // Defense
+  | "maxCore"
+  | "repair"
+  | "corePerWave"
+  | "damageReduction"
+  | "slow"
+  // Special
+  | "splashAdd"
+  | "splashConvert"
+  | "execute"
+  | "chain"
+  // Income
+  | "income"
+  | "bounty"
+  | "interest"
+  | "coreOnKill"
+  | "freeUpgrade";
 export type GlyphId =
   | "spark"
   | "ion"
@@ -112,21 +137,6 @@ export type ProjectileState = {
   splash: boolean;
 };
 
-export type UpgradeEffect =
-  | { type: "damage"; v: number }
-  | { type: "range"; v: number }
-  | { type: "fireRate"; v: number }
-  | { type: "core"; v: number }
-  | { type: "scrap"; v: number }
-  | { type: "rare" };
-
-export type UpgradeOffer = {
-  id: number;
-  title: string;
-  detail: string;
-  cost: number;
-  apply: UpgradeEffect;
-};
 
 export type DailyMission = {
   id: string;
@@ -195,6 +205,26 @@ export type CombatMods = {
   execute: number;
   coreOnKill: number;
   corePerWave: number;
+  /** Crit chance 0–0.75 (cap enforced in workshop) */
+  critChance: number;
+  /** Crit damage multiplier added on top of base 2× (e.g. 0.5 → crits deal 2.5×) */
+  critFactor: number;
+  /** Multishot chance 0–1.0 */
+  multishotChance: number;
+  /** Extra targets hit by multishot (cap 4) */
+  multishotTargets: number;
+  /** Fraction of leak damage blocked 0–0.8 */
+  damageReduction: number;
+  /** Enemy speed multiplier reduction 0–0.5 */
+  slow: number;
+  /** Extra chain/arc targets beyond primary splash (cap 6) */
+  chain: number;
+  /** Fraction of held scrap added as income each wave */
+  interest: number;
+  /** Chance per upgrade purchase that the cost is refunded */
+  freeUpgradeChance: number;
+  /** Flat bonus to maxCore */
+  maxCoreBonus: number;
 };
 
 export type PlayerProfile = {
@@ -279,9 +309,10 @@ export type RunSnapshot = {
   difficulty: DifficultyTier;
   towers: Array<{ kind: TowerKind; coord: GridCoord; rank: number; invested: number }>;
   runDamageBonus: number;
-  runRangeBonus: number;
-  runFireRateBonus: number;
-  runBountyBonus: number;
+  /** Legacy fields from pre-21-upgrade system; kept optional for back-compat. */
+  runRangeBonus?: number;
+  runFireRateBonus?: number;
+  runBountyBonus?: number;
   corePatchUsed: boolean;
   reviveAdUsed: boolean;
   inRun: Partial<Record<InRunId, number>>;
@@ -321,7 +352,20 @@ export const WORKSHOP_IDS: WorkshopId[] = [
   "cooldown",
   "drop",
 ];
-export const IN_RUN_IDS: InRunId[] = ["dmg", "rng", "rate", "bounty", "income", "repair"];
+export const IN_RUN_IDS: InRunId[] = [
+  // Offense
+  "dmg", "rate", "rng", "critChance", "critFactor", "multishotChance", "multishotTargets",
+  // Defense
+  "maxCore", "repair", "corePerWave", "damageReduction", "slow",
+  // Special
+  "splashAdd", "splashConvert", "execute", "chain",
+  // Income
+  "income", "bounty", "interest", "coreOnKill", "freeUpgrade",
+];
+
+/** Maximum towers a player can place at once. `restoreTowers` bypasses this
+ *  for existing saved runs so in-flight saves are never broken. */
+export const MAX_TOWERS = 4;
 export const GLYPH_IDS: GlyphId[] = [
   "spark",
   "ion",
@@ -492,6 +536,16 @@ export function emptyMods(): CombatMods {
     execute: 0,
     coreOnKill: 0,
     corePerWave: 0,
+    critChance: 0,
+    critFactor: 0,
+    multishotChance: 0,
+    multishotTargets: 0,
+    damageReduction: 0,
+    slow: 0,
+    chain: 0,
+    interest: 0,
+    freeUpgradeChance: 0,
+    maxCoreBonus: 0,
   };
 }
 

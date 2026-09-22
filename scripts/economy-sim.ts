@@ -54,7 +54,7 @@ import {
   type PlayerProfile,
   type TowerKind,
 } from "../src/lib/game/types.ts";
-import { IN_RUN, inRunAtCap, inRunCost } from "../src/lib/game/workshop.ts";
+import { IN_RUN, inRunAtCap, inRunCost, inRunEffect } from "../src/lib/game/workshop.ts";
 
 /** Mirrors types.ts startingCore() minus nextRunCoreBonus (not modeled). */
 function startingCore(p: PlayerProfile): number {
@@ -64,10 +64,10 @@ function startingCore(p: PlayerProfile): number {
 /** Mirrors engine.refreshMods() minus modules/chassis (not modeled). */
 function buildMods(p: PlayerProfile, inRun: Partial<Record<InRunId, number>>): CombatMods {
   const mods = emptyMods();
-  mods.damage = damageBonus(p) + (inRun.dmg ?? 0) * IN_RUN.dmg.step;
-  mods.range = rangeBonus(p) + (inRun.rng ?? 0) * IN_RUN.rng.step;
-  mods.fireRate = fireRateBonus(p) + (inRun.rate ?? 0) * IN_RUN.rate.step;
-  mods.bounty = bountyBonus(p) + (inRun.bounty ?? 0) * IN_RUN.bounty.step;
+  mods.damage = damageBonus(p) + inRunEffect(inRun.dmg ?? 0, "dmg");
+  mods.range = rangeBonus(p) + inRunEffect(inRun.rng ?? 0, "rng");
+  mods.fireRate = fireRateBonus(p) + inRunEffect(inRun.rate ?? 0, "rate");
+  mods.bounty = bountyBonus(p) + inRunEffect(inRun.bounty ?? 0, "bounty");
   return mods;
 }
 

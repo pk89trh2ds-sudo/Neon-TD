@@ -45,7 +45,7 @@ import { createIapCheckoutSession, getEntitlements } from "./entitlements-api";
 import { type IapProductKey } from "./iap-catalog";
 import { Renderer } from "./renderer";
 import { useGame } from "./store";
-import { buyWorkshop, IN_RUN, inRunAtCap, inRunCost } from "./workshop";
+import { buyWorkshop, IN_RUN, inRunAtCap, inRunCost, inRunEffect } from "./workshop";
 import {
   DIFFICULTY_MOD,
   MILESTONES,
@@ -81,7 +81,6 @@ import {
   type SkillId,
   type Screen,
   type TowerKind,
-  type UpgradeOffer,
   type WorkshopId,
 } from "./types";
 
@@ -96,7 +95,6 @@ export class GameEngine {
   scrap = 0;
   selectedTower: TowerKind = "pulse";
   selectedCoord: GridCoord | null = null;
-  offers: UpgradeOffer[] = [];
   paused = false;
   speed: 1 | 2 | 3 = 1;
   seed = 1;
@@ -256,7 +254,7 @@ export class GameEngine {
     });
     const persist = () => {
       this.flushProfile();
-      if (this.phase === "combat" || this.phase === "upgrade") this.persistRun();
+      if (this.phase === "combat") this.persistRun();
       this.track("session_end", { wave: this.wave, phase: this.phase });
       // A backgrounded/closing tab may not survive schedulePush's debounce —
       // flush immediately here so the last few minutes aren't lost.
@@ -312,14 +310,10 @@ export class GameEngine {
     this.coreHP = this.maxCore;
     this.scrap = startingScrap(this.profile);
     this.sim.runDamageBonus = this.profile.nextRunDamageBonus || 0;
-    this.sim.runRangeBonus = 0;
-    this.sim.runFireRateBonus = 0;
-    this.sim.runBountyBonus = 0;
     this.profile.nextRunCoreBonus = 0;
     this.profile.nextRunDamageBonus = 0;
     this.claimed.clear();
     this.endless = true;
-    this.offers = [];
     this.paused = false;
     this.speed = 1;
     this.corePatchUsed = false;
@@ -350,7 +344,7 @@ export class GameEngine {
 
   /**
    * Today's shared seeded run: same seed for every player, so the same
-   * sequence of upgrade offers and drop rolls plays out for everyone — normal
+   * sequence of drop rolls plays out for everyone — normal
    * difficulty always, so "wave reached" is comparable regardless of a
    * player's unlock progress. Permanent Workshop/skill/prestige bonuses still
    * apply (this is "same circuit, same drops — see how far your build gets,"
@@ -389,9 +383,6 @@ export class GameEngine {
     this.reviveAdUsed = snap.reviveAdUsed ?? false;
     this.sim.resetRun();
     this.sim.runDamageBonus = snap.runDamageBonus;
-    this.sim.runRangeBonus = snap.runRangeBonus;
-    this.sim.runFireRateBonus = snap.runFireRateBonus;
-    this.sim.runBountyBonus = snap.runBountyBonus;
     this.inRun = snap.inRun ?? {};
     this.runKills = snap.runKills ?? 0;
     this.runGlyphs = [];
@@ -400,20 +391,8 @@ export class GameEngine {
     this.settled = false;
     this.sim.restoreTowers(snap.towers ?? []);
     this.refreshMods();
-    if (snap.phase === "upgrade") {
-      // Saved mid-upgrade: restore offers and auto-start next wave (no upgrade screen pause)
-      this.offers = this.sim.makeOffers(this.wave, this.rng);
-      if (this.profile.pendingRareUpgrades > 0) {
-        this.offers.unshift(this.sim.injectRareOffer(this.wave));
-      }
-      this.wave += 1;
-      this.phase = "combat";
-      this.beginWave();
-    } else {
-      this.offers = [];
-      this.phase = "combat";
-      this.sim.queueWave(waveComposition(this.wave));
-    }
+    this.phase = "combat";
+    this.sim.queueWave(waveComposition(this.wave));
     this.eventLog = `Resumed wave ${this.wave}.`;
     useGame.getState().patch({ screen: "play" });
     this.syncHud();
@@ -439,7 +418,7 @@ export class GameEngine {
   }
 
   cashOut() {
-    if (this.phase !== "combat" && this.phase !== "upgrade") return;
+    if (this.phase !== "combat") return;
     this.settleRun("cashout");
     this.phase = "gameOver";
     this.eventLog = `Banked at wave ${this.wave}.`;
@@ -473,11 +452,11 @@ export class GameEngine {
   }
 
   buyInRun(id: InRunId) {
-    if (this.phase !== "combat" && this.phase !== "upgrade") return;
+    if (this.phase !== "combat") return;
     const bought = this.inRun[id] ?? 0;
     if (inRunAtCap(bought, id)) {
       audio.play("deny");
-      this.eventLog = `${IN_RUN[id].label} maxed this run.`;
+      this.eventLog = `${IN_RUN[id].label} maxed.`;
       this.syncHud();
       return;
     }
@@ -488,20 +467,19 @@ export class GameEngine {
       this.syncHud();
       return;
     }
-    this.scrap -= cost;
-    // `repair` used to skip this counter entirely, so inRunCost(0, "repair",
-    // wave) — a flat, near-constant cost — was recomputed on every single
-    // purchase forever. Same 1.16^n curve as every other line now; this is
-    // what turned +4 max core into an unbounded scrap sink at ~178 scrap
-    // apiece by wave 250.
+    // Free-upgrade chance: refund the cost with some probability
+    const isFree = this.mods.freeUpgradeChance > 0 && Math.random() < this.mods.freeUpgradeChance;
+    if (!isFree) this.scrap -= cost;
     this.inRun[id] = bought + 1;
     if (id === "repair") {
-      this.coreHP += IN_RUN.repair.step;
-      this.maxCore = Math.max(this.maxCore, this.coreHP);
+      this.coreHP = Math.min(this.maxCore + IN_RUN.repair.step, this.coreHP + IN_RUN.repair.step);
+    } else if (id === "maxCore") {
+      this.maxCore += IN_RUN.maxCore.step;
+      this.refreshMods();
     } else {
       this.refreshMods();
     }
-    this.eventLog = `${IN_RUN[id].label} ${this.inRun[id] ?? "applied"}.`;
+    this.eventLog = `${IN_RUN[id].label} ${this.inRun[id] ?? "applied"}.${isFree ? " (FREE)" : ""}`;
     audio.play("upgrade");
     this.persistRun();
     this.syncHud();
@@ -551,7 +529,7 @@ export class GameEngine {
   }
 
   handleTile(coord: GridCoord) {
-    if (this.phase !== "combat" && this.phase !== "upgrade") return;
+    if (this.phase !== "combat") return;
     if (this.sim.towerAt(coord)) {
       this.selectedCoord = coord;
       this.eventLog = this.inspect(coord);
@@ -623,25 +601,17 @@ export class GameEngine {
     this.syncHud();
   }
 
-  buyOffer(offer: UpgradeOffer) {
-    if (this.phase !== "combat" && this.phase !== "upgrade") return;
-    if (offer.cost > 0 && this.scrap < offer.cost) {
-      this.eventLog = "Not enough scrap.";
-      audio.play("deny");
-      this.syncHud();
-      return;
+  /** Consume a pending rare token: grant 5 free stacks of each offense line. */
+  consumeRareToken() {
+    if (this.phase !== "combat") return;
+    if (this.profile.pendingRareUpgrades <= 0) return;
+    consumeRare(this.profile);
+    const offenseLines = ["dmg", "rate", "rng"] as const;
+    for (const id of offenseLines) {
+      this.inRun[id] = (this.inRun[id] ?? 0) + 5;
     }
-    if (offer.cost > 0) this.scrap -= offer.cost;
-    const core = { v: this.coreHP };
-    if (offer.apply.type === "rare") consumeRare(this.profile);
-    this.sim.apply(offer.apply, core, (n) => {
-      this.scrap += n;
-    });
-    this.coreHP = core.v;
-    this.maxCore = Math.max(this.maxCore, this.coreHP);
     this.refreshMods();
-    this.eventLog = `Installed ${offer.title}.`;
-    this.offers = this.offers.filter((o) => o.id !== offer.id);
+    this.eventLog = "Rare token applied: +5 Overload, Coolant, Longscan.";
     audio.play("upgrade");
     this.flushProfile();
     this.persistRun();
@@ -649,9 +619,8 @@ export class GameEngine {
   }
 
   startNextWave() {
-    if (this.phase !== "upgrade" && this.phase !== "combat") return;
+    if (this.phase !== "combat") return;
     this.wave += 1;
-    this.offers = [];
     this.phase = "combat";
     this.beginWave();
     this.persistRun();
@@ -1167,7 +1136,7 @@ export class GameEngine {
       if (n === 8) this.acc = 0;
     }
     this.renderer.reduced = this.profile.reducedMotion || !this.profile.shakeEnabled;
-    if (this.phase === "combat" || this.phase === "upgrade" || this.phase === "gameOver") {
+    if (this.phase === "combat" || this.phase === "gameOver") {
       this.renderer.draw(this.sim, dt, {
         selected: this.selectedCoord,
         hoverKind: this.selectedTower,
@@ -1263,6 +1232,8 @@ export class GameEngine {
     this.sim.spawnCooldown = 0; // first enemy of new wave spawns immediately — no visible gap
     const income = (this.inRun.income ?? 0) * IN_RUN.income.step;
     if (income) this.scrap += income;
+    // Interest: % of held scrap added each wave
+    if (this.mods.interest > 0) this.scrap += Math.floor(this.scrap * this.mods.interest);
     if (this.mods.corePerWave > 0) {
       // Clamp to maxCore, no ratchet — see the tick() coreHeal comment
       // above. A cipher with corePerWave (BULWARK/FORTITUDE/LAST WISH)
@@ -1282,9 +1253,9 @@ export class GameEngine {
     this.profile.isEndlessUnlocked = true;
     this.maybeDropChassis();
     this.rng = new SplitMix64(this.seed + clearedWave * 997);
-    this.offers = this.sim.makeOffers(clearedWave, this.rng);
+    // Auto-consume any pending rare tokens: grant 5 free stacks of offense lines
     if (this.profile.pendingRareUpgrades > 0) {
-      this.offers.unshift(this.sim.injectRareOffer(clearedWave));
+      this.consumeRareToken();
     }
     this.noteWave(clearedWave);
     // Was `Math.floor(clearedWave / 5)` points on EVERY clear — +50 points
@@ -1294,7 +1265,7 @@ export class GameEngine {
     // for one wave-250 clear against a 30-level/3000-XP pass).
     if (clearedWave % 5 === 0) this.profile.skillPoints += 1;
     this.profile.battlePassXP += Math.round(Math.min(80, 8 + clearedWave * 0.3));
-    // No upgrade-screen pause — next wave starts immediately, offers float over HUD
+    // Next wave starts immediately; upgrades are available any time in the drawer.
     this.wave += 1;
     this.eventLog = `Wave ${clearedWave} cleared. Wave ${this.wave} incoming.`;
     audio.play("clear");
@@ -1388,9 +1359,6 @@ export class GameEngine {
         invested: t.invested,
       })),
       runDamageBonus: this.sim.runDamageBonus,
-      runRangeBonus: this.sim.runRangeBonus,
-      runFireRateBonus: this.sim.runFireRateBonus,
-      runBountyBonus: this.sim.runBountyBonus,
       corePatchUsed: this.corePatchUsed,
       reviveAdUsed: this.reviveAdUsed,
       inRun: { ...this.inRun },
@@ -1404,19 +1372,27 @@ export class GameEngine {
       damage:
         damageBonus(this.profile) +
         this.sim.runDamageBonus +
-        (this.inRun.dmg ?? 0) * IN_RUN.dmg.step,
-      range:
-        rangeBonus(this.profile) + this.sim.runRangeBonus + (this.inRun.rng ?? 0) * IN_RUN.rng.step,
-      fireRate:
-        fireRateBonus(this.profile) +
-        this.sim.runFireRateBonus +
-        (this.inRun.rate ?? 0) * IN_RUN.rate.step,
-      bounty:
-        bountyBonus(this.profile) +
-        this.sim.runBountyBonus +
-        (this.inRun.bounty ?? 0) * IN_RUN.bounty.step,
+        inRunEffect(this.inRun.dmg ?? 0, "dmg"),
+      range: rangeBonus(this.profile) + inRunEffect(this.inRun.rng ?? 0, "rng"),
+      fireRate: fireRateBonus(this.profile) + inRunEffect(this.inRun.rate ?? 0, "rate"),
+      bounty: bountyBonus(this.profile) + inRunEffect(this.inRun.bounty ?? 0, "bounty"),
     };
     const { mods, cipher } = loadoutMods(this.profile, run);
+    // Layer in-run lines that loadoutMods doesn't know about.
+    mods.critChance = Math.min(0.75, inRunEffect(this.inRun.critChance ?? 0, "critChance"));
+    mods.critFactor = inRunEffect(this.inRun.critFactor ?? 0, "critFactor");
+    mods.multishotChance = Math.min(1, inRunEffect(this.inRun.multishotChance ?? 0, "multishotChance"));
+    mods.multishotTargets = inRunEffect(this.inRun.multishotTargets ?? 0, "multishotTargets");
+    mods.damageReduction = Math.min(0.8, inRunEffect(this.inRun.damageReduction ?? 0, "damageReduction"));
+    mods.slow = Math.min(0.5, inRunEffect(this.inRun.slow ?? 0, "slow"));
+    mods.splashAdd = inRunEffect(this.inRun.splashAdd ?? 0, "splashAdd");
+    mods.splashConvert = Math.min(1, inRunEffect(this.inRun.splashConvert ?? 0, "splashConvert"));
+    mods.execute = Math.min(1, inRunEffect(this.inRun.execute ?? 0, "execute"));
+    mods.chain = inRunEffect(this.inRun.chain ?? 0, "chain");
+    mods.interest = inRunEffect(this.inRun.interest ?? 0, "interest");
+    mods.coreOnKill = Math.min(1, inRunEffect(this.inRun.coreOnKill ?? 0, "coreOnKill"));
+    mods.freeUpgradeChance = Math.min(0.5, inRunEffect(this.inRun.freeUpgrade ?? 0, "freeUpgrade"));
+    // maxCoreBonus is applied when purchasing; no modifier needed here.
     this.mods = mods;
     this.cipherName = cipher?.name ?? null;
   }
@@ -1545,7 +1521,6 @@ export class GameEngine {
       selectedTower: this.selectedTower,
       selectedCoord: this.selectedCoord,
       eventLog: this.eventLog,
-      offers: this.offers,
       pendingRare: this.profile.pendingRareUpgrades,
       pulls: this.profile.inventoryPulls,
       skillPoints: this.profile.skillPoints,
@@ -1559,6 +1534,8 @@ export class GameEngine {
       inRun: { ...this.inRun },
       cipherName: this.cipherName,
       upgradesOpen: this.upgradesOpen,
+      towerCount: this.sim.towers.length,
+      towerLimit: this.sim.towerLimit,
       recap: this.profile.lastRecap,
       ...this.bossStatus(),
     });

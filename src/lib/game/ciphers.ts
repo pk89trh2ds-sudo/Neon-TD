@@ -191,6 +191,16 @@ export function addPartial(a: CombatMods, b: Partial<CombatMods>): CombatMods {
     execute: a.execute + (b.execute ?? 0),
     coreOnKill: a.coreOnKill + (b.coreOnKill ?? 0),
     corePerWave: a.corePerWave + (b.corePerWave ?? 0),
+    critChance: a.critChance + (b.critChance ?? 0),
+    critFactor: a.critFactor + (b.critFactor ?? 0),
+    multishotChance: a.multishotChance + (b.multishotChance ?? 0),
+    multishotTargets: a.multishotTargets + (b.multishotTargets ?? 0),
+    damageReduction: a.damageReduction + (b.damageReduction ?? 0),
+    slow: a.slow + (b.slow ?? 0),
+    chain: a.chain + (b.chain ?? 0),
+    interest: a.interest + (b.interest ?? 0),
+    freeUpgradeChance: a.freeUpgradeChance + (b.freeUpgradeChance ?? 0),
+    maxCoreBonus: a.maxCoreBonus + (b.maxCoreBonus ?? 0),
   };
 }
 

@@ -18,7 +18,7 @@ import {
   type EnemyKind,
 } from "./types.ts";
 import { waveComposition } from "./sim.ts";
-import { IN_RUN, inRunAtCap, inRunCost } from "./workshop.ts";
+import { IN_RUN, inRunAtCap, inRunCost, inRunEffect } from "./workshop.ts";
 
 describe("endlessScaling", () => {
   it("is monotonically non-decreasing", () => {
@@ -120,21 +120,33 @@ describe("in-run upgrade cost curve (the repair bug)", () => {
     );
   });
 
-  it("economy lines (income/bounty) grow cost faster than combat lines at the same purchase count", () => {
-    const bought = 8;
-    const incomeCost = inRunCost(bought, "income", 50);
-    const dmgCost = inRunCost(bought, "dmg", 50);
-    assert.ok(
-      incomeCost > dmgCost,
-      `income at ${bought} buys (${incomeCost}) should cost more than dmg (${dmgCost}) — steeper growth curve`,
-    );
+  it("no in-run line is capped below its mechanical limit (cap policy)", () => {
+    // Every cap that exists must be justified by a mechanic: crit chance can't
+    // exceed 1.0, multishot targets are bounded, etc. Income/bounty must be
+    // uncapped (the old policy they once enforced is deleted).
+    assert.equal(IN_RUN.income.cap, undefined, "income must be uncapped");
+    assert.equal(IN_RUN.bounty.cap, undefined, "bounty must be uncapped");
+    // Mechanically capped lines: verify their caps are in range and positive.
+    assert.ok((IN_RUN.critChance.cap ?? 0) >= 500, "crit chance cap should reach meaningful depth");
+    assert.ok((IN_RUN.damageReduction.cap ?? 0) > 0, "damage reduction should have a cap");
+    assert.ok((IN_RUN.slow.cap ?? 0) > 0, "slow should have a cap");
+    // inRunAtCap correctly gates at the cap boundary.
+    assert.equal(inRunAtCap(IN_RUN.critChance.cap!, "critChance"), true, "at cap → capped");
+    assert.equal(inRunAtCap((IN_RUN.critChance.cap ?? 1) - 1, "critChance"), false, "one below cap → not capped");
+    assert.equal(inRunAtCap(9999, "income"), false, "uncapped line never caps");
   });
 
-  it("income and bounty are hard-capped; combat lines are not", () => {
-    assert.equal(inRunAtCap(IN_RUN.income.cap!, "income"), true);
-    assert.equal(inRunAtCap(IN_RUN.income.cap! - 1, "income"), false);
-    assert.equal(inRunAtCap(IN_RUN.bounty.cap!, "bounty"), true);
-    assert.equal(inRunAtCap(1000, "dmg"), false);
+  it("multiplicative offense lines stack multiplicatively, not additively", () => {
+    // At n=10, (1+step)^10 - 1 must be larger than n*step for multiplicative lines.
+    const multResult = inRunEffect(10, "dmg");
+    const addResult = 10 * IN_RUN.dmg.step;
+    assert.ok(
+      multResult > addResult,
+      `multiplicative stacking (${multResult.toFixed(4)}) should exceed additive (${addResult.toFixed(4)})`,
+    );
+    // Non-multiplicative line should be exactly additive.
+    const incomeResult = inRunEffect(10, "income");
+    assert.equal(incomeResult, 10 * IN_RUN.income.step, "income should stack additively");
   });
 });
 
