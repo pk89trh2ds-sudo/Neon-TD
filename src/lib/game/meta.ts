@@ -1,3 +1,5 @@
+// Relative imports carry explicit extensions so `node --experimental-strip-types`
+// can resolve this module directly for meta.test.ts — see the note in sim.ts.
 import {
   MODULE_IDS,
   PASS_TRACK,
@@ -8,7 +10,9 @@ import {
   SKILL,
   defaultProfile,
   dayStamp,
+  difficultyUnlocked,
   emptyChassis,
+  highestUnlockedDifficulty,
   passLevel,
   type AchievementId,
   type ChassisKind,
@@ -20,11 +24,11 @@ import {
   type RunSnapshot,
   type ShopItem,
   type SkillId,
-} from "./types";
-import { SplitMix64, hashStr } from "./sim";
-import { addGlyph } from "./ciphers";
-import { buyWorkshop } from "./workshop";
-import type { WorkshopId } from "./types";
+} from "./types.ts";
+import { SplitMix64, hashStr } from "./sim.ts";
+import { addGlyph } from "./ciphers.ts";
+import { buyWorkshop } from "./workshop.ts";
+import type { WorkshopId } from "./types.ts";
 
 function safeParse<T>(raw: string | null): T | null {
   if (!raw) return null;
@@ -48,7 +52,7 @@ function safeParse<T>(raw: string | null): T | null {
 const INTEGRITY_SALT = "neontd-v3-guard";
 
 function integritySummary(p: PlayerProfile): string {
-  return [
+  const base = [
     p.bankScrap,
     p.inventoryPulls,
     p.pendingRareUpgrades,
@@ -68,6 +72,16 @@ function integritySummary(p: PlayerProfile): string {
     JSON.stringify(p.battlePassClaimed ?? []),
     JSON.stringify(p.achievementsClaimed ?? []),
   ].join("|");
+  // Appended ONLY when dev mode has been used, so a save that never touched
+  // it hashes byte-identically to the pre-existing format and keeps
+  // verifying — adding the field unconditionally would invalidate every
+  // existing player's checksum and tamper-flag the whole install base.
+  //
+  // With the marker inside the hash, hand-deleting `devUnlockAll` from an
+  // exported save (the one field loadProfile re-derives tamperFlag from)
+  // breaks the checksum instead of laundering the save clean, so the flag
+  // survives a round-trip through exportProfileJson/importProfileJson.
+  return p.devUnlockAll ? `${base}|taint:dev` : base;
 }
 
 function computeChecksum(p: PlayerProfile): string {
@@ -117,6 +131,15 @@ export function loadProfile(): PlayerProfile {
     if (!merged.equippedChassisId && merged.chassis[0]) {
       merged.equippedChassisId = merged.chassis[0].id;
     }
+    // Save migration: the difficulty gate moved from a global
+    // `highestWaveReached` threshold to a per-tier `highestByDifficulty`
+    // record, so a save can carry a selected tier it no longer has unlocked.
+    // Nothing on the start path re-checks it (setDifficulty/startGame just
+    // assign), which left such a profile launching e.g. Insane runs while the
+    // picker showed every tier locked.
+    if (!difficultyUnlocked(merged, merged.difficulty)) {
+      merged.difficulty = highestUnlockedDifficulty(merged);
+    }
     return merged;
   } catch {
     return defaultProfile();
@@ -145,7 +168,7 @@ export function importProfileJson(raw: string): PlayerProfile | null {
   if (!data || typeof data !== "object") return null;
   const base = defaultProfile();
   const tamperFlag = (!!data.checksum && !verifyChecksum(data)) || !!data.devUnlockAll;
-  return {
+  const merged: PlayerProfile = {
     ...base,
     ...data,
     version: 3,
@@ -156,6 +179,12 @@ export function importProfileJson(raw: string): PlayerProfile | null {
     highestByDifficulty: { ...base.highestByDifficulty, ...(data.highestByDifficulty ?? {}) },
     tamperFlag,
   };
+  // Same migration as loadProfile — an imported save can carry a tier the
+  // current unlock rules don't grant.
+  if (!difficultyUnlocked(merged, merged.difficulty)) {
+    merged.difficulty = highestUnlockedDifficulty(merged);
+  }
+  return merged;
 }
 
 export function loadRun(): RunSnapshot | null {

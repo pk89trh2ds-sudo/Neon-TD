@@ -70,6 +70,53 @@ reached.
   10–250) — the old branch replaced most of the wave with bosses, which is
   what made it easier.
 
+## Measured against the target — still off by ~10x
+
+The target table above is **not** what the current numbers produce. Measured
+with `scripts/economy-sim.ts` (real cost curves, real kill income, real leak
+rules, a greedy buyer, normal difficulty):
+
+| Player state            | Target | Measured | Whole map maxed by |
+| ----------------------- | ------ | -------- | ------------------ |
+| Fresh, no Lab ranks     | 25–35  | **370**  | wave 89            |
+| Moderate Lab investment | ~100   | **400**  | wave 79            |
+| Deep Lab investment     | ~200   | **430**  | wave 69            |
+
+A fresh profile takes **2 leaks in 369 waves** and then dies abruptly. No
+wave in any of the three runs was unclearable, so nothing is being forgiven
+by the harness — the run really is that safe until it isn't.
+
+Two separate problems:
+
+1. **Absolute difficulty is ~10x too low** for a player who builds. The
+   2-tower case the rebalance targeted _is_ fixed (`balance-sim.ts`: dies
+   wave 9, was wave 250+). Filling the map is not.
+2. **Permanent progression barely matters.** Fresh → deep moves the death
+   wave by 60 waves (16%) across the entire Lab/skill range. The three
+   profiles converge because in-run scrap, not Lab rank, is what actually
+   builds the defence.
+
+Root cause of both: **total tower investment is bounded by the tile count
+while kill income is unbounded.** There are 62 buildable tiles; filling and
+maxing every one costs roughly 52k scrap total, and from ~wave 100 a single
+wave pays out thousands. So every profile converges on the same terminal
+state — full map, every tower at MAX_RANK — within 90 waves, and the only
+sink left is the uncapped dmg/rng/rate lines, which buy a flat +6%/+5% at
+`1.16^n`, i.e. damage growing logarithmically in cumulative scrap. That
+plateau is the same for everyone, so everyone dies where `endlessScaling`
+crosses it.
+
+Steepening `endlessScaling` alone would pull all three numbers down together
+without widening the spread — it moves the crossover, not the plateau.
+Fixing (2) means either making permanent ranks multiplicatively stronger,
+or making in-run coverage something the player has to be Lab-invested to
+afford (lower kill income, steeper rank costs), so that a fresh player
+cannot reach the terminal build. That is a design decision, not a
+retune — deliberately left open here rather than guessed at.
+
+`DIFFICULTY_UNLOCK_WAVE = 100` is also worth revisiting in that light: it
+sits below the ~370 floor, so in practice it gates nothing.
+
 ## Tuning tools
 
 - `src/lib/game/balance.test.ts` — the objectively-checkable invariants
@@ -77,23 +124,30 @@ reached.
   regressions, difficulty gating). Run directly:
   `node --experimental-strip-types --test src/lib/game/balance.test.ts`
   (also wired into `npm run test`).
-- `scripts/balance-sim.ts` — a headless sim harness for iterating on the
-  curve without launching the browser. Fixed tower loadout, no economy loop
-  (no Upgrades/Lab purchases modeled) — it isolates the enemy-scaling and
-  combat math from the economy. Run:
+- `src/lib/game/meta.test.ts` — save-integrity guard and the save
+  migrations around it (dev-mode taint surviving an export/import round
+  trip, locked-difficulty clamping). Also in `npm run test`.
+- `scripts/balance-sim.ts` — fixed tower loadout, no economy loop. Isolates
+  the enemy-scaling and combat math. Answers "is the curve itself sane".
   `node --experimental-strip-types scripts/balance-sim.ts`
+- `scripts/economy-sim.ts` — the same sim with the in-run economy closed:
+  scrap income, tower placement/ranks, Upgrade purchases, leaks. This is
+  the one that measures the target table above. Takes optional
+  `<tier> <maxWave> [--trace]`:
+  `node --experimental-strip-types scripts/economy-sim.ts normal 600`
 
-Neither tool models the full in-run economy (buying Upgrades mid-run,
-banking into the Lab between runs), so the wave-100/wave-200 targets above
-still need confirming with a real playtest. Expect this to take a couple of
-tuning passes — these are principled starting numbers derived from the old
-math, not numbers verified against real play.
+Neither harness models modules, glyphs/ciphers, prestige or rolled offers,
+all of which favour the player — so `economy-sim.ts` numbers are lower
+bounds on how far a build can actually get.
 
 ## Known simplification
 
-The dev-mode toggle (7 taps on the Settings version string) permanently
-tamper-flags the save the moment it's turned on, reusing the existing
-save-integrity flag (`meta.ts`) rather than a second mechanism. This means
+Both dev-mode grants (7 taps on the Settings version string, then either
+button) permanently tamper-flag the save the moment they're taken, reusing
+the existing save-integrity flag (`meta.ts`) rather than a second
+mechanism — `engine.markDevUsed()` is the single taint point, and it sets
+`tamperFlag` for the current session _and_ `devUnlockAll` so the taint
+survives a reload. This means
 a save that ever used dev mode is excluded from the daily leaderboard and
 analytics forever after, even if the toggle is switched back off. That's
 intentional — a save that used unlimited resources even once shouldn't be

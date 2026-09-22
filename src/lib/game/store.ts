@@ -9,9 +9,9 @@ import {
   type Screen,
   type Toast,
   type TowerKind,
-  type UpgradeOffer,
   defaultProfile,
 } from "./types";
+import { type UpgradeTab } from "./workshop";
 
 export type GameStore = {
   ready: boolean;
@@ -27,8 +27,8 @@ export type GameStore = {
   selectedTower: TowerKind;
   selectedCoord: GridCoord | null;
   eventLog: string;
-  offers: UpgradeOffer[];
   pendingRare: number;
+  upgradeTab: UpgradeTab;
   pulls: number;
   skillPoints: number;
   difficulty: DifficultyTier;
@@ -44,6 +44,8 @@ export type GameStore = {
   inspectText: string;
   endless: boolean;
   inRun: Partial<Record<InRunId, number>>;
+  towerCount: number;
+  towerLimit: number;
   cipherName: string | null;
   upgradesOpen: boolean;
   recap: RunRecap | null;
@@ -75,8 +77,8 @@ export const useGame = create<GameStore>((set) => ({
   selectedTower: "pulse",
   selectedCoord: null,
   eventLog: "Ready.",
-  offers: [],
   pendingRare: 0,
+  upgradeTab: "offense",
   pulls: 0,
   skillPoints: 0,
   difficulty: "normal",
@@ -92,6 +94,8 @@ export const useGame = create<GameStore>((set) => ({
   inspectText: "",
   endless: true,
   inRun: {},
+  towerCount: 0,
+  towerLimit: 4,
   cipherName: null,
   upgradesOpen: false,
   recap: null,

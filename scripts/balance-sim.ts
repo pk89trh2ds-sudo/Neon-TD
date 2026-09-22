@@ -50,15 +50,13 @@ function runStrategy(
   const rng = new SplitMix64(1);
   const rngFn = () => rng.nextFloat();
 
+  // Towers are placed once, above. resetCombatants() clears enemies,
+  // projectiles and the spawn queue but NOT towers (only resetRun() does),
+  // so re-placing them per wave would rely on canPlace()/rankUp() rejecting
+  // the duplicate — which silently stops holding if MAX_RANK or those
+  // guards ever change.
   for (let wave = 1; wave <= maxWave; wave++) {
     sim.resetCombatants();
-    // Re-place towers (resetCombatants clears them) — cheap for this
-    // fixed-loadout harness, not how the real game works.
-    for (let i = 0; i < towers.length; i++) {
-      const { kind, rank } = towers[i]!;
-      sim.placeTower(kind, coords[i]!);
-      for (let r = 1; r < rank; r++) sim.rankUp(coords[i]!);
-    }
     sim.queueWave(waveComposition(wave));
     sim.spawnCooldown = 0;
     // Run up to 90 simulated seconds per wave at 60hz — generous; real

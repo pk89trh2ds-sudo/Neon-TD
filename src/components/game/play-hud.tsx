@@ -1,6 +1,6 @@
 /**
  * The in-run HUD: top status bar, boss health bar, the "Upgrades" drawer
- * (rolled offers + stackable buys), tower-placement bar, pause overlay
+ * (four-tab stackable upgrades), tower-placement bar, pause overlay
  * (incl. the dev-mode wave-skip control), game-over recap, and the toast
  * stack. This is the most actively edited file during live-play bugfixing
  * — kept separate from the menu screens for that reason.
@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { ArrowUpCircle, FastForward, Pause, Play, Shield, X, Zap } from "lucide-react";
 import { getEngine } from "@/lib/game/engine";
 import { useGame } from "@/lib/game/store";
-import { IN_RUN, IN_RUN_IDS, inRunAtCap, inRunCost } from "@/lib/game/workshop";
+import { IN_RUN, IN_RUN_IDS_BY_TAB, inRunAtCap, inRunCost, type UpgradeTab } from "@/lib/game/workshop";
 import { DIFFICULTY_MOD, TOWER, TOWER_KINDS, type TowerKind } from "@/lib/game/types";
 import { Btn, Bar, Panel } from "./ui";
 import { cn } from "@/lib/utils";
@@ -33,7 +33,9 @@ export function PlayHud() {
   const cipher = useGame((s) => s.cipherName);
   const upgradesOpen = useGame((s) => s.upgradesOpen);
   const inRun = useGame((s) => s.inRun);
-  const offers = useGame((s) => s.offers);
+  const upgradeTab = useGame((s) => s.upgradeTab);
+  const towerCount = useGame((s) => s.towerCount);
+  const towerLimit = useGame((s) => s.towerLimit);
   const bossActive = useGame((s) => s.bossActive);
   const bossHpFrac = useGame((s) => s.bossHpFrac);
   const devUnlockAll = useGame((s) => s.profile.devUnlockAll);
@@ -94,53 +96,7 @@ export function PlayHud() {
 
       <div className="absolute inset-x-0 bottom-0 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         {upgradesOpen && phase !== "gameOver" && (
-          <div className="mx-auto mb-2 flex max-w-4xl flex-col gap-2 rounded-lg border border-line hud-panel p-2">
-            {offers.length > 0 && (
-              <div className="flex flex-col gap-1.5">
-                <div className="px-1 font-mono text-[10px] uppercase tracking-widest text-cyan">
-                  This wave
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {offers.map((o) => (
-                    <button
-                      key={o.id}
-                      onClick={() => getEngine()?.buyOffer(o)}
-                      disabled={o.cost > 0 && scrap < o.cost}
-                      className="rounded-md border border-cyan/40 bg-panel px-2 py-2 text-left disabled:opacity-40"
-                    >
-                      <div className="text-xs font-medium">{o.title}</div>
-                      <div className="font-mono text-[11px] text-cyan">
-                        {o.cost === 0 ? "FREE" : o.cost}
-                      </div>
-                      <div className="mt-0.5 text-[10px] leading-tight text-muted">{o.detail}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div className="grid grid-cols-3 gap-2">
-              {IN_RUN_IDS.map((id) => {
-                const spec = IN_RUN[id];
-                const bought = inRun[id] ?? 0;
-                const atCap = inRunAtCap(bought, id);
-                const cost = inRunCost(bought, id, wave);
-                return (
-                  <button
-                    key={id}
-                    onClick={() => getEngine()?.buyInRun(id)}
-                    disabled={atCap || scrap < cost}
-                    className="rounded-md border border-line bg-panel px-2 py-2 text-left disabled:opacity-40"
-                  >
-                    <div className="text-xs font-medium">{spec.label}</div>
-                    <div className="mt-0.5 text-[10px] leading-tight text-muted">{spec.detail}</div>
-                    <div className="mt-0.5 font-mono text-[11px] text-cyan">
-                      {atCap ? "maxed" : cost} · {id === "repair" ? "heal" : `x${bought}`}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <UpgradesDrawer wave={wave} scrap={scrap} inRun={inRun} upgradeTab={upgradeTab} />
         )}
         {selectedCoord && (
           <div className="mx-auto mb-2 flex max-w-4xl items-center gap-2 rounded-lg border border-line hud-panel px-3 py-2">
@@ -157,16 +113,13 @@ export function PlayHud() {
           <button
             onClick={() => getEngine()?.toggleUpgrades()}
             className={cn(
-              "relative flex min-h-16 flex-col items-center justify-center rounded-lg border px-1 py-2",
+              "flex min-h-16 flex-col items-center justify-center rounded-lg border px-1 py-2",
               upgradesOpen ? "border-cyan bg-cyan/15" : "border-line hud-panel",
             )}
           >
-            {offers.length > 0 && !upgradesOpen && (
-              <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-cyan" />
-            )}
             <ArrowUpCircle className="size-4 text-cyan" />
             <span className="text-xs">Upgrades</span>
-            <span className="font-mono text-[11px] text-muted">cash</span>
+            <span className="font-mono text-[11px] text-muted">{towerCount}/{towerLimit}</span>
           </button>
           {TOWER_KINDS.map((kind: TowerKind) => {
             const spec = TOWER[kind];
@@ -198,7 +151,7 @@ export function PlayHud() {
             {tutorial === 2 &&
               "Hostiles leak into the vault if they finish the lane. Keep fire on the front."}
             {tutorial === 3 &&
-              "Wave clear. Upgrades appear on the right — tap to install while fighting."}
+              "Wave clear. Tap Upgrades, bottom left, to stack upgrades while fighting."}
             <div className="mt-2 flex justify-end">
               <Btn
                 variant="quiet"
@@ -226,6 +179,67 @@ export function PlayHud() {
 
       {phase === "gameOver" && <GameOverCard />}
     </>
+  );
+}
+
+const TAB_LABELS: Record<UpgradeTab, string> = {
+  offense: "Offense",
+  defense: "Defense",
+  special: "Special",
+  income: "Income",
+};
+
+function UpgradesDrawer({
+  wave,
+  scrap,
+  inRun,
+  upgradeTab,
+}: {
+  wave: number;
+  scrap: number;
+  inRun: Partial<Record<string, number>>;
+  upgradeTab: UpgradeTab;
+}) {
+  const ids = IN_RUN_IDS_BY_TAB[upgradeTab];
+  return (
+    <div className="mx-auto mb-2 flex max-w-4xl flex-col gap-2 rounded-lg border border-line hud-panel p-2">
+      <div className="flex gap-1">
+        {(Object.keys(TAB_LABELS) as UpgradeTab[]).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => useGame.getState().patch({ upgradeTab: tab })}
+            className={cn(
+              "flex-1 rounded px-1 py-1 text-[11px] font-medium uppercase tracking-widest",
+              upgradeTab === tab ? "bg-cyan/20 text-cyan" : "text-muted",
+            )}
+          >
+            {TAB_LABELS[tab]}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+        {ids.map((id) => {
+          const spec = IN_RUN[id];
+          const bought = (inRun[id] as number | undefined) ?? 0;
+          const atCap = inRunAtCap(bought, id);
+          const cost = inRunCost(bought, id, wave);
+          return (
+            <button
+              key={id}
+              onClick={() => getEngine()?.buyInRun(id)}
+              disabled={atCap || scrap < cost}
+              className="rounded-md border border-line bg-panel px-2 py-2 text-left disabled:opacity-40"
+            >
+              <div className="text-xs font-medium">{spec.label}</div>
+              <div className="mt-0.5 text-[10px] leading-tight text-muted">{spec.detail}</div>
+              <div className="mt-0.5 font-mono text-[11px] text-cyan">
+                {atCap ? "maxed" : cost} · {id === "repair" ? "heal" : `×${bought}`}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
