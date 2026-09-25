@@ -95,6 +95,18 @@ const explicitBaseURL = env("BETTER_AUTH_URL");
 // Explicit `string[]` (not a readonly tuple) — Better Auth's DynamicBaseURLConfig
 // requires a mutable `allowedHosts: string[]`.
 const previewAllowedHosts: string[] = [...PREVIEW_ALLOWED_HOSTS];
+// This deployment's own hosts on Vercel, from its system env vars (exposed to
+// every deployment by default; set by Vercel, never by a request): the
+// production domain, the stable branch alias PR previews are tested on, and the
+// per-deployment URL. Trusting them keeps email/password working on the
+// production domain and on every PR preview without hand-maintaining
+// BETTER_AUTH_URL per environment. Empty outside Vercel.
+const vercelHosts: string[] = [
+  env("VERCEL_PROJECT_PRODUCTION_URL"),
+  env("VERCEL_BRANCH_URL"),
+  env("VERCEL_URL"),
+].filter((host): host is string => Boolean(host));
+const vercelOrigins: string[] = vercelHosts.map((host) => `https://${host}`);
 // Local `npm run dev` (port 8080 contract). Browsers may send Origin as any of
 // these for the same server — trusting only `localhost` rejects `127.0.0.1` and
 // breaks email/password with "Invalid origin".
@@ -106,7 +118,7 @@ const LOCAL_DEV_ORIGINS: string[] = [
 const baseURL = explicitBaseURL ?? {
   // Include loopback hosts so dynamic baseURL resolves for local email/password
   // (not only the preview wildcard).
-  allowedHosts: [...previewAllowedHosts, "localhost", "127.0.0.1", "[::1]"],
+  allowedHosts: [...previewAllowedHosts, ...vercelHosts, "localhost", "127.0.0.1", "[::1]"],
   // `auto` → trust both http:// and https:// expansions of allowedHosts
   // (preview is https; local dev is http).
   protocol: "auto" as const,
@@ -116,12 +128,13 @@ const baseURL = explicitBaseURL ?? {
 // Origins Better Auth accepts on credentialed POSTs (sign-up/sign-in, etc.).
 // Missing entries here surface as FORBIDDEN "Invalid origin".
 const trustedOrigins: string[] = explicitBaseURL
-  ? [explicitBaseURL, ...LOCAL_DEV_ORIGINS]
+  ? [explicitBaseURL, ...vercelOrigins, ...LOCAL_DEV_ORIGINS]
   : [
       // Host wildcards (matched against Origin's host)
       ...previewAllowedHosts,
       // Full-origin wildcards (matched against Origin)
       ...previewAllowedHosts.flatMap((host) => [`https://${host}`, `http://${host}`]),
+      ...vercelOrigins,
       ...LOCAL_DEV_ORIGINS,
     ];
 
@@ -142,7 +155,9 @@ const grokUserInfoUrl = `${issuerBase}/api/auth/oauth2/userinfo`;
 // schema from `migrations/auth/0001_auth.sql`, copied into `migrations/` when
 // the app turns sign-in on.
 const database = databaseUrl
-  ? new Pool({ connectionString: databaseUrl })
+  ? // Same fail-fast bound as src/lib/db.ts: a paused/down DB errors in 10s
+    // instead of holding sign-in open until the function times out.
+    new Pool({ connectionString: databaseUrl, connectionTimeoutMillis: 10_000 })
   : { dialect: pgliteDialect(() => getPglite()), type: "postgres" as const };
 
 /** Session token cookie name — also read by the live-preview popup completion page. */

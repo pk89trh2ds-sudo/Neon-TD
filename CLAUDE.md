@@ -178,6 +178,18 @@ template federate through a Grok-hosted auth broker
 (`GROK_AUTH_ISSUER`) that has no presence outside the Grok platform, so they
 are not used here.
 
+Deployment requirements (`src/lib/auth/server.ts`):
+- **`BETTER_AUTH_SECRET` must be set in Vercel** (Production and Preview).
+  Without it each serverless instance falls back to its own random signing
+  secret, so sessions silently break whenever a request lands on a different
+  instance or a cold start.
+- Trusted origins automatically include this deployment's own Vercel hosts
+  (`VERCEL_PROJECT_PRODUCTION_URL`, `VERCEL_BRANCH_URL`, `VERCEL_URL` — Vercel
+  system env vars), so email/password works on the production domain and on
+  every PR branch-alias URL even without `BETTER_AUTH_URL`. A custom domain
+  that isn't the project's primary production domain still needs
+  `BETTER_AUTH_URL`.
+
 ### Path alias
 
 `@/*` → `./src/*` (see `tsconfig.json`).
