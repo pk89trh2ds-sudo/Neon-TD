@@ -498,7 +498,7 @@ export function emptyMods(): CombatMods {
  */
 export function endlessScaling(wave: number): number {
   const early = 1 + Math.log(Math.max(wave, 1)) * 0.45;
-  const late = Math.pow(1.018, Math.max(0, wave - 15));
+  const late = Math.pow(1.012, Math.max(0, wave - 15));
   return early * late;
 }
 

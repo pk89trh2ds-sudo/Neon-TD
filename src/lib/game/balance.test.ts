@@ -38,12 +38,12 @@ describe("endlessScaling", () => {
 
   it("scales meaningfully from early to late game", () => {
     assert.ok(
-      endlessScaling(100) >= endlessScaling(25) * 4,
-      `wave 100 (${endlessScaling(100)}) should be ≥4× wave 25 (${endlessScaling(25)})`,
+      endlessScaling(100) >= endlessScaling(25) * 2.5,
+      `wave 100 (${endlessScaling(100)}) should be ≥2.5× wave 25 (${endlessScaling(25)})`,
     );
     assert.ok(
-      endlessScaling(200) >= endlessScaling(100) * 5,
-      `wave 200 (${endlessScaling(200)}) should be ≥5× wave 100 (${endlessScaling(100)})`,
+      endlessScaling(200) >= endlessScaling(100) * 3,
+      `wave 200 (${endlessScaling(200)}) should be ≥3× wave 100 (${endlessScaling(100)})`,
     );
   });
 });
