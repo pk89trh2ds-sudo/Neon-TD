@@ -16,7 +16,11 @@ import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import pg from "pg";
-import { isUnreachableDbError, pendingMigrations } from "./migration-plan.mjs";
+import {
+  isUnreachableDbError,
+  pendingMigrations,
+  supabaseDirectHostHint,
+} from "./migration-plan.mjs";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -96,6 +100,10 @@ main().catch((err) => {
       `[migrate] DB unreachable from build environment (${err?.code || err?.message}) — skipping.`,
       "If the Supabase project is paused, restore it; pending migrations apply on the next deploy.",
     );
+    // Unlike a paused project, this one never heals on its own — and the
+    // running app can't reach the DB either — so make it impossible to miss.
+    const hint = supabaseDirectHostHint(databaseUrl);
+    if (hint) console.warn(`[migrate] ⚠️  ${hint}`);
     process.exit(0);
   }
   console.error("[migrate] failed:", err?.message || err);

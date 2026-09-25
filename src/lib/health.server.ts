@@ -15,6 +15,7 @@
  *
  * Deliberately returns no error detail: this route is public.
  */
+import { supabaseDirectHostHint } from "../../scripts/migration-plan.mjs";
 import { dbSource, getSql } from "./db";
 
 export async function handleHealth(): Promise<Response> {
@@ -28,6 +29,9 @@ export async function handleHealth(): Promise<Response> {
     return new Response(JSON.stringify({ ok: true, db: dbSource }), { status: 200, headers });
   } catch (err) {
     console.error("[health] database check failed:", err);
+    // Server log only — the response body stays free of config detail.
+    const hint = supabaseDirectHostHint(process.env.DATABASE_URL);
+    if (hint) console.error(`[health] ${hint}`);
     return new Response(JSON.stringify({ ok: false, db: dbSource }), { status: 503, headers });
   }
 }
