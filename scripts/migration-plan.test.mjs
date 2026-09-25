@@ -10,7 +10,12 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { isMigrationFile, migrationName, pendingMigrations } from "./migration-plan.mjs";
+import {
+  isMigrationFile,
+  isUnreachableDbError,
+  migrationName,
+  pendingMigrations,
+} from "./migration-plan.mjs";
 import { projectRoot } from "./with-app-env.mjs";
 
 const AUTH_MIGRATION = "0001_auth.sql";
@@ -96,4 +101,44 @@ test("the copy check reads both files and catches an edit", () => {
   writeFileSync(join(root, "migrations", AUTH_MIGRATION), "create table t (x int);\n");
   const drifted = authSchemaCopy(root);
   assert.notEqual(drifted.copy, drifted.source);
+});
+
+test("an unreachable or paused database is skippable at build time", () => {
+  // A paused Supabase project's direct host drops out of DNS — this is the
+  // error that used to fail every production build while the DB slept.
+  const enotfound = Object.assign(new Error("getaddrinfo ENOTFOUND db.x.supabase.co"), {
+    code: "ENOTFOUND",
+  });
+  assert.equal(isUnreachableDbError(enotfound), true);
+  for (const code of [
+    "EAI_AGAIN",
+    "ENETUNREACH",
+    "EHOSTUNREACH",
+    "ECONNREFUSED",
+    "ETIMEDOUT",
+    "57P03",
+  ]) {
+    assert.equal(isUnreachableDbError({ code, message: "" }), true, code);
+  }
+  // node-postgres connectionTimeoutMillis, and the Supabase pooler for a paused project.
+  assert.equal(isUnreachableDbError(new Error("timeout expired")), true);
+  assert.equal(
+    isUnreachableDbError(new Error("Connection terminated due to connection timeout")),
+    true,
+  );
+  assert.equal(isUnreachableDbError({ code: "XX000", message: "Tenant or user not found" }), true);
+});
+
+test("real migration and auth failures are not skippable", () => {
+  assert.equal(
+    isUnreachableDbError({ code: "42601", message: 'syntax error at or near "tabel"' }),
+    false,
+  );
+  assert.equal(
+    isUnreachableDbError({ code: "28P01", message: "password authentication failed" }),
+    false,
+  );
+  assert.equal(isUnreachableDbError(new Error("boom")), false);
+  assert.equal(isUnreachableDbError(undefined), false);
+  assert.equal(isUnreachableDbError("ENOTFOUND"), false);
 });

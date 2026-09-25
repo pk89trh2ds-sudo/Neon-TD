@@ -14,3 +14,7 @@ neon-td-portal-build.zip
 # and, once `vercel link` is run, `project.json` with the project and org IDs,
 # which Vercel's own docs say to keep out of git.
 .vercel/
+
+# Local QA preview state (npm run preview:restart) — rewritten on every run.
+.grok/preview.log
+.grok/preview.pid

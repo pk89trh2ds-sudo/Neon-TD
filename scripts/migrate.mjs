@@ -16,7 +16,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import pg from "pg";
-import { pendingMigrations } from "./migration-plan.mjs";
+import { isUnreachableDbError, pendingMigrations } from "./migration-plan.mjs";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -42,7 +42,13 @@ async function main() {
     return;
   }
 
-  const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
+  // Bounded connect: an unresponsive host must fail fast (and be skipped below),
+  // not hold the Vercel build open until the OS-level TCP timeout.
+  const pool = new pg.Pool({
+    connectionString: databaseUrl,
+    max: 1,
+    connectionTimeoutMillis: 15_000,
+  });
   const client = await pool.connect();
   try {
     await client.query(
@@ -81,15 +87,14 @@ async function main() {
 }
 
 main().catch((err) => {
-  // Network-unreachable errors mean the build machine can't reach the DB
-  // (common in Vercel's build environment). The production serverless
-  // function runs in a different network context where the DB is reachable,
-  // so this is safe to skip — the schema is managed via Supabase migrations.
-  const networkErrors = new Set(["ENETUNREACH", "ECONNREFUSED", "ETIMEDOUT", "EHOSTUNREACH"]);
-  if (networkErrors.has(err?.code)) {
+  // Unreachable (paused Supabase project, no route from the build machine,
+  // DB still starting after a restore) must not fail the deploy: the app code
+  // is fine, and the next deploy with the DB up applies anything pending.
+  // A real SQL/auth error still fails the build below.
+  if (isUnreachableDbError(err)) {
     console.warn(
-      `[migrate] DB unreachable from build environment (${err.code}) — skipping.`,
-      "Schema is managed via Supabase; production functions can reach the DB.",
+      `[migrate] DB unreachable from build environment (${err?.code || err?.message}) — skipping.`,
+      "If the Supabase project is paused, restore it; pending migrations apply on the next deploy.",
     );
     process.exit(0);
   }

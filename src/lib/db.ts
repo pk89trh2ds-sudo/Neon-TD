@@ -93,7 +93,10 @@ function createNeonSql(): Promise<Sql> {
     types.setTypeParser(OID_INT8, Number);
     types.setTypeParser(OID_DATE, identity);
     types.setTypeParser(OID_INTERVAL, identity);
-    const pool = new Pool({ connectionString: databaseUrl });
+    // Fail fast when the DB is down or paused (Supabase free tier auto-pauses):
+    // without a bound, a request waits on the TCP connect until the serverless
+    // function's own timeout instead of returning an error the client handles.
+    const pool = new Pool({ connectionString: databaseUrl, connectionTimeoutMillis: 10_000 });
     return toSql(async <T>(text: string, params: unknown[]) => {
       const res = await pool.query(text, params);
       return res.rows as T[];
