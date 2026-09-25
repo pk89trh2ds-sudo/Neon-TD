@@ -87,3 +87,33 @@ export function isUnreachableDbError(err) {
   if (typeof code === "string" && UNREACHABLE_CODES.has(code)) return true;
   return typeof message === "string" && UNREACHABLE_MESSAGES.some((re) => re.test(message));
 }
+
+/**
+ * If `databaseUrl` points at a Supabase project's *direct* host
+ * (`db.<ref>.supabase.co`), an actionable explanation of why it can't be
+ * reached from Vercel; otherwise null.
+ *
+ * That host publishes only an IPv6 (AAAA) record, and Vercel's build machines
+ * and serverless functions are IPv4-only, so every connection fails with
+ * ENOTFOUND / ENETUNREACH even while the project is up. It is a configuration
+ * problem with a configuration fix — the Supavisor pooler string, which is
+ * reachable over IPv4 — so say that instead of a bare DNS error.
+ * @param {string | undefined} databaseUrl
+ * @returns {string | null}
+ */
+export function supabaseDirectHostHint(databaseUrl) {
+  let host;
+  try {
+    host = new URL(String(databaseUrl)).hostname;
+  } catch {
+    return null;
+  }
+  const match = /^db\.([a-z0-9]+)\.supabase\.co$/i.exec(host);
+  if (!match) return null;
+  return (
+    `DATABASE_URL points at Supabase's direct host ${host}, which is IPv6-only — ` +
+    "Vercel is IPv4-only and can never reach it. Set DATABASE_URL to the " +
+    "Transaction pooler string instead (Supabase dashboard → Connect → " +
+    `Transaction pooler: postgresql://postgres.${match[1]}:<password>@<region>.pooler.supabase.com:6543/postgres).`
+  );
+}

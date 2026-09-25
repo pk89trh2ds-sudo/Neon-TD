@@ -15,6 +15,7 @@ import {
   isUnreachableDbError,
   migrationName,
   pendingMigrations,
+  supabaseDirectHostHint,
 } from "./migration-plan.mjs";
 import { projectRoot } from "./with-app-env.mjs";
 
@@ -141,4 +142,26 @@ test("real migration and auth failures are not skippable", () => {
   assert.equal(isUnreachableDbError(new Error("boom")), false);
   assert.equal(isUnreachableDbError(undefined), false);
   assert.equal(isUnreachableDbError("ENOTFOUND"), false);
+});
+
+test("the IPv6-only Supabase direct host gets an actionable pooler hint", () => {
+  const hint = supabaseDirectHostHint(
+    "postgresql://postgres:secret@db.hdbnsrtlhiiowvioezdg.supabase.co:5432/postgres",
+  );
+  assert.match(hint, /IPv6-only/);
+  assert.match(hint, /Transaction pooler/);
+  assert.match(hint, /postgres\.hdbnsrtlhiiowvioezdg:<password>@/);
+  assert.doesNotMatch(hint, /secret/, "the hint must never echo the password");
+});
+
+test("pooler, other hosts and unparseable URLs get no hint", () => {
+  for (const url of [
+    "postgresql://postgres.ref:pw@aws-0-us-west-2.pooler.supabase.com:6543/postgres",
+    "postgres://u:p@ep-cool-name.us-east-2.aws.neon.tech/db",
+    "postgres://u:p@localhost:5432/db",
+    "not a url",
+    undefined,
+  ]) {
+    assert.equal(supabaseDirectHostHint(url), null, String(url));
+  }
 });

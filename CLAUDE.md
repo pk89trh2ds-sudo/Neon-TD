@@ -245,6 +245,19 @@ Hard-won gotchas — read before touching the areas below:
   DNS, so it surfaces as `ENOTFOUND` — that code was missing from the old
   inline skip list and failed every production build while the DB slept. Add
   new "can't reach it" signatures there, never real SQL/auth errors.
+- **`DATABASE_URL` must be Supabase's Transaction pooler string**
+  (`postgresql://postgres.<ref>:<pw>@<region>.pooler.supabase.com:6543/postgres`),
+  **never the direct host** `db.<ref>.supabase.co`. The direct host is
+  IPv6-only and Vercel (build *and* functions) is IPv4-only, so it fails with
+  `ENOTFOUND` even while the project is `ACTIVE_HEALTHY` — production ran for
+  weeks unable to reach its DB this way, masked by the build's graceful skip
+  (an earlier commit wrongly assumed only the build machine was affected).
+  `supabaseDirectHostHint()` (`scripts/migration-plan.mjs`) now prints the fix
+  in both the migrate log and the `[health]` log. Use `?sslmode=no-verify`
+  for TLS, not `sslmode=require`: this `pg` treats `require` as
+  `verify-full`, and Supabase's CA isn't in Node's trust store. The app uses
+  no session-level features (LISTEN, advisory locks, named prepared
+  statements), so transaction mode is safe.
 - **`GET /api/health`** (`src/lib/health.server.ts`, dual-wired) runs
   `select 1`: 200 when the DB answers, 503 otherwise. A daily **Vercel Cron**
   (`vercel.config.crons` in `vite.config.ts`, emitted into
