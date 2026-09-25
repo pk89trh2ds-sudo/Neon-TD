@@ -239,6 +239,18 @@ Hard-won gotchas — read before touching the areas below:
   `.vercel/output/config.json`) hits it so the Supabase free tier never sees a
   quiet week and auto-pauses. Both `pg` pools carry a `connectionTimeoutMillis`
   so a dead DB fails fast (503 / skipped migration) instead of hanging.
+- **Supabase's Data API is locked out of every app table** (migration
+  `0005_lock_down_data_api.sql`): RLS on with no policies, all `anon`/
+  `authenticated` grants revoked, and the schema's default privileges for
+  `postgres` no longer auto-grant new tables to them. The app never uses
+  supabase-js or the anon key — it connects over `DATABASE_URL` as
+  `postgres`, the table owner (BYPASSRLS), so none of this affects it. Keep it
+  that way: a new table needs no extra step (default privileges cover it), but
+  do **not** add RLS policies or grants for `anon`/`authenticated` — that
+  would re-expose `account` (password hashes) and `session` tokens over REST.
+  The Supabase advisor's INFO-level "RLS enabled, no policy" findings are this
+  deny-all, intentionally. Migrations must also stay valid on PGLite, where
+  those roles don't exist — guard Supabase-only statements (see 0005).
 - **`node --experimental-strip-types` requires explicit file extensions**
   on relative imports, unlike Vite/tsc's "bundler" module resolution (which
   accepts extensionless imports). Any `.ts` file that needs to run under
