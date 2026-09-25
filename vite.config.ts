@@ -279,6 +279,49 @@ function stripeWebhookPlugin(): Plugin {
   };
 }
 
+/**
+ * Mounts `GET /api/health` during `npm run dev` — the dev twin of
+ * server/middleware/health.ts; both call src/lib/health.server.ts.
+ */
+function healthPlugin(): Plugin {
+  return {
+    name: "app-builder:health",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        try {
+          const pathOnly = (req.url ?? "").split("?", 1)[0] ?? "";
+          if (pathOnly !== "/api/health") {
+            next();
+            return;
+          }
+          const method = (req.method ?? "GET").toUpperCase();
+          if (method !== "GET" && method !== "HEAD") {
+            res.statusCode = 405;
+            res.setHeader("content-type", "text/plain; charset=utf-8");
+            res.end("Method Not Allowed");
+            return;
+          }
+          const mod = (await server.ssrLoadModule("/src/lib/health.server.ts")) as {
+            handleHealth: () => Promise<Response>;
+          };
+          const response = await mod.handleHealth();
+          res.statusCode = response.status;
+          response.headers.forEach((value, key) => res.setHeader(key, value));
+          res.end(Buffer.from(await response.arrayBuffer()));
+        } catch (err) {
+          console.error("[app-builder] /api/health handler failed:", err);
+          if (!res.headersSent) {
+            res.statusCode = 500;
+            res.setHeader("content-type", "text/plain; charset=utf-8");
+            res.end("health check failed");
+          }
+        }
+      });
+    },
+  };
+}
+
 // Portal builds (Poki/CrazyGames/itch.io) need a self-contained static zip —
 // no server function, since those platforms only host static files. Default
 // `build`/`preview` (Vercel SSR) are completely untouched; this only kicks in
@@ -310,6 +353,8 @@ export default defineConfig(({ command, isPreview }) => ({
     authApiPlugin(),
     // Same reasoning for /api/stripe/webhook.
     stripeWebhookPlugin(),
+    // Same reasoning for /api/health.
+    healthPlugin(),
     // Dev-only /__app-env, read by scripts/check-auth-invariant.mjs.
     appEnvPlugin(),
     tailwindcss(),
@@ -325,8 +370,18 @@ export default defineConfig(({ command, isPreview }) => ({
                 { preset: "static" }
               : {
                   preset: "vercel",
-                  // Auto-registers server/middleware/* (auth, Stripe webhook).
+                  // Auto-registers server/middleware/* (auth, Stripe webhook,
+                  // health).
                   serverDir: "./server",
+                  vercel: {
+                    config: {
+                      // Daily DB keep-alive: the Supabase free tier pauses a
+                      // project after ~7 idle days, which takes sign-in, cloud
+                      // save and the leaderboard down. Daily is also the most
+                      // frequent schedule Vercel's Hobby plan allows.
+                      crons: [{ path: "/api/health", schedule: "17 9 * * *" }],
+                    },
+                  },
                 },
           ),
         ]

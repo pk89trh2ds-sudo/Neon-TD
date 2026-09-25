@@ -44,3 +44,46 @@ export function pendingMigrations(paths, applied) {
     .sort((a, b) => a.name.localeCompare(b.name))
     .filter(({ name }) => !done.has(name));
 }
+
+/**
+ * Error codes meaning "the database could not be reached at all", as opposed to
+ * "it was reached and rejected a migration". Only the first kind may be skipped
+ * at build time. ENOTFOUND is what a *paused* Supabase free-tier project looks
+ * like on its direct host (`db.<ref>.supabase.co` is removed from DNS until the
+ * project is restored); EAI_AGAIN is a transient DNS failure; 57P03 is
+ * "the database system is starting up" while a restore is in progress.
+ */
+const UNREACHABLE_CODES = new Set([
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "ENETUNREACH",
+  "EHOSTUNREACH",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "57P03",
+]);
+
+/**
+ * Messages with no `code` that mean the same thing: node-postgres's own
+ * `connectionTimeoutMillis` expiry, and Supavisor (the Supabase pooler host)
+ * answering for a paused or deleted project.
+ */
+const UNREACHABLE_MESSAGES = [
+  /timeout expired/i,
+  /connection timeout/i,
+  /tenant or user not found/i,
+];
+
+/**
+ * True when `err` means the database is unreachable (down, paused, starting,
+ * or not routable from here) rather than a real migration/SQL/auth failure.
+ * @param {unknown} err
+ * @returns {boolean}
+ */
+export function isUnreachableDbError(err) {
+  if (!err || typeof err !== "object") return false;
+  const { code, message } = /** @type {{ code?: unknown, message?: unknown }} */ (err);
+  if (typeof code === "string" && UNREACHABLE_CODES.has(code)) return true;
+  return typeof message === "string" && UNREACHABLE_MESSAGES.some((re) => re.test(message));
+}

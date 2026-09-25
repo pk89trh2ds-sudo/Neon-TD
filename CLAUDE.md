@@ -222,12 +222,23 @@ Hard-won gotchas — read before touching the areas below:
 - **Supabase's free tier auto-pauses** the Postgres project after
   inactivity (`status: "INACTIVE"`). A "works locally, 500s in prod" report
   should always check this first (`mcp__Supabase__list_projects` /
-  `restore_project`) before assuming a code bug — though see the PGLite
+  `restore_project`, or `GET /api/health` → 503) before assuming a code bug — though see the PGLite
   point above, since both can present identically as a 500 and need to be
   ruled out separately.
 - **`scripts/migrate.mjs` must not fail the Vercel build** when the DB is
   unreachable at build time (e.g. Supabase paused, or building without
-  secrets configured) — it should skip gracefully, not throw.
+  secrets configured) — it should skip gracefully, not throw. "Unreachable"
+  is decided by `isUnreachableDbError()` in `scripts/migration-plan.mjs`
+  (unit-tested). A **paused** Supabase project's direct host disappears from
+  DNS, so it surfaces as `ENOTFOUND` — that code was missing from the old
+  inline skip list and failed every production build while the DB slept. Add
+  new "can't reach it" signatures there, never real SQL/auth errors.
+- **`GET /api/health`** (`src/lib/health.server.ts`, dual-wired) runs
+  `select 1`: 200 when the DB answers, 503 otherwise. A daily **Vercel Cron**
+  (`vercel.config.crons` in `vite.config.ts`, emitted into
+  `.vercel/output/config.json`) hits it so the Supabase free tier never sees a
+  quiet week and auto-pauses. Both `pg` pools carry a `connectionTimeoutMillis`
+  so a dead DB fails fast (503 / skipped migration) instead of hanging.
 - **`node --experimental-strip-types` requires explicit file extensions**
   on relative imports, unlike Vite/tsc's "bundler" module resolution (which
   accepts extensionless imports). Any `.ts` file that needs to run under
