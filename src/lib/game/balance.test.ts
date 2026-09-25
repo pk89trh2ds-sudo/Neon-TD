@@ -36,19 +36,14 @@ describe("endlessScaling", () => {
     assert.ok(endlessScaling(25) < 3, `wave 25 scaling was ${endlessScaling(25)}`);
   });
 
-  it("is meaningfully steeper than the pre-rebalance curve by wave 100", () => {
-    const oldScaling = (wave: number) => {
-      const early = 1 + Math.log(Math.max(wave, 1)) * 0.48;
-      const late = wave <= 40 ? 0 : Math.pow((wave - 40) / 16, 1.28);
-      return early + late;
-    };
+  it("scales meaningfully from early to late game", () => {
     assert.ok(
-      endlessScaling(100) > oldScaling(100) * 1.5,
-      `new ${endlessScaling(100)} vs old ${oldScaling(100)}`,
+      endlessScaling(100) >= endlessScaling(25) * 4,
+      `wave 100 (${endlessScaling(100)}) should be ≥4× wave 25 (${endlessScaling(25)})`,
     );
     assert.ok(
-      endlessScaling(200) > oldScaling(200) * 1.5,
-      `new ${endlessScaling(200)} vs old ${oldScaling(200)}`,
+      endlessScaling(200) >= endlessScaling(100) * 5,
+      `wave 200 (${endlessScaling(200)}) should be ≥5× wave 100 (${endlessScaling(100)})`,
     );
   });
 });

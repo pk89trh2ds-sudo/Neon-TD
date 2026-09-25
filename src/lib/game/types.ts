@@ -497,9 +497,9 @@ export function emptyMods(): CombatMods {
  * for the reasoning and the headless sim used to tune these constants.
  */
 export function endlessScaling(wave: number): number {
-  const early = 1 + Math.log(Math.max(wave, 1)) * 0.55;
-  const late = wave <= 25 ? 0 : Math.pow((wave - 25) / 13, 1.42);
-  return early + late;
+  const early = 1 + Math.log(Math.max(wave, 1)) * 0.45;
+  const late = Math.pow(1.018, Math.max(0, wave - 15));
+  return early * late;
 }
 
 /** Extra HP multiplier stacked onto boss enemies only, on top of

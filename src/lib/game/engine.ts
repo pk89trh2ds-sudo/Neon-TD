@@ -1361,15 +1361,17 @@ export class GameEngine {
   private refreshMods() {
     const run = {
       damage:
-        damageBonus(this.profile) +
-        this.sim.runDamageBonus +
-        (this.inRun.dmg ?? 0) * IN_RUN.dmg.step,
+        (1 + damageBonus(this.profile) + this.sim.runDamageBonus) *
+          (1 + (this.inRun.dmg ?? 0) * IN_RUN.dmg.step) -
+        1,
       range:
-        rangeBonus(this.profile) + this.sim.runRangeBonus + (this.inRun.rng ?? 0) * IN_RUN.rng.step,
+        (1 + rangeBonus(this.profile) + this.sim.runRangeBonus) *
+          (1 + (this.inRun.rng ?? 0) * IN_RUN.rng.step) -
+        1,
       fireRate:
-        fireRateBonus(this.profile) +
-        this.sim.runFireRateBonus +
-        (this.inRun.rate ?? 0) * IN_RUN.rate.step,
+        (1 + fireRateBonus(this.profile) + this.sim.runFireRateBonus) *
+          (1 + (this.inRun.rate ?? 0) * IN_RUN.rate.step) -
+        1,
       bounty:
         bountyBonus(this.profile) +
         this.sim.runBountyBonus +
