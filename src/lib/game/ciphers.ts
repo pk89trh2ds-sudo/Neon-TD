@@ -8,10 +8,7 @@ import {
   type PlayerProfile,
 } from "./types";
 
-export const CHASSIS: Record<
-  ChassisKind,
-  { label: string; sockets: number; detail: string }
-> = {
+export const CHASSIS: Record<ChassisKind, { label: string; sockets: number; detail: string }> = {
   dual: { label: "Circuit Board", sockets: 2, detail: "Two sockets. Starter frame." },
   tri: { label: "Lattice Frame", sockets: 3, detail: "Three sockets. Mid-run drop." },
   quad: { label: "Prime Chassis", sockets: 4, detail: "Four sockets. High-tier words." },
@@ -29,22 +26,134 @@ export const GLYPH: Record<
     detail: string;
   }
 > = {
-  spark: { mark: "SP", label: "SPARK", tier: 1, solo: { damage: 0.02 }, weight: 18, detail: "+2% damage" },
-  ion: { mark: "IO", label: "ION", tier: 1, solo: { fireRate: 0.02 }, weight: 18, detail: "+2% fire rate" },
-  hex: { mark: "HX", label: "HEX", tier: 1, solo: { range: 0.02 }, weight: 16, detail: "+2% range" },
-  volt: { mark: "VO", label: "VOLT", tier: 1, solo: { bounty: 0.03 }, weight: 16, detail: "+3% bounty" },
-  node: { mark: "ND", label: "NODE", tier: 2, solo: { damage: 0.03 }, weight: 12, detail: "+3% damage" },
-  flux: { mark: "FX", label: "FLUX", tier: 2, solo: { range: 0.03 }, weight: 12, detail: "+3% range" },
-  coil: { mark: "CL", label: "COIL", tier: 2, solo: { fireRate: 0.03 }, weight: 10, detail: "+3% fire rate" },
-  arc: { mark: "AR", label: "ARC", tier: 2, solo: { splashAdd: 0.15 }, weight: 10, detail: "+0.15 splash" },
-  surge: { mark: "SG", label: "SURGE", tier: 3, solo: { damage: 0.04 }, weight: 7, detail: "+4% damage" },
-  kernel: { mark: "KR", label: "KERNEL", tier: 3, solo: { corePerWave: 0.4 }, weight: 7, detail: "+0.4 core / wave" },
-  nulls: { mark: "NL", label: "NULL", tier: 3, solo: { execute: 0.02 }, weight: 6, detail: "Execute 2%" },
-  apex: { mark: "AX", label: "APEX", tier: 3, solo: { fireRate: 0.04 }, weight: 6, detail: "+4% fire rate" },
-  prism: { mark: "PR", label: "PRISM", tier: 4, solo: { splashConvert: 0.05 }, weight: 3, detail: "5% splash convert" },
-  voids: { mark: "VD", label: "VOID", tier: 4, solo: { execute: 0.03 }, weight: 3, detail: "Execute 3%" },
-  sigma: { mark: "SM", label: "SIGMA", tier: 4, solo: { bounty: 0.08 }, weight: 2, detail: "+8% bounty" },
-  zenith: { mark: "ZN", label: "ZENITH", tier: 4, solo: { damage: 0.06 }, weight: 2, detail: "+6% damage" },
+  spark: {
+    mark: "SP",
+    label: "SPARK",
+    tier: 1,
+    solo: { damage: 0.02 },
+    weight: 18,
+    detail: "+2% damage",
+  },
+  ion: {
+    mark: "IO",
+    label: "ION",
+    tier: 1,
+    solo: { fireRate: 0.02 },
+    weight: 18,
+    detail: "+2% fire rate",
+  },
+  hex: {
+    mark: "HX",
+    label: "HEX",
+    tier: 1,
+    solo: { range: 0.02 },
+    weight: 16,
+    detail: "+2% range",
+  },
+  volt: {
+    mark: "VO",
+    label: "VOLT",
+    tier: 1,
+    solo: { bounty: 0.03 },
+    weight: 16,
+    detail: "+3% bounty",
+  },
+  node: {
+    mark: "ND",
+    label: "NODE",
+    tier: 2,
+    solo: { damage: 0.03 },
+    weight: 12,
+    detail: "+3% damage",
+  },
+  flux: {
+    mark: "FX",
+    label: "FLUX",
+    tier: 2,
+    solo: { range: 0.03 },
+    weight: 12,
+    detail: "+3% range",
+  },
+  coil: {
+    mark: "CL",
+    label: "COIL",
+    tier: 2,
+    solo: { fireRate: 0.03 },
+    weight: 10,
+    detail: "+3% fire rate",
+  },
+  arc: {
+    mark: "AR",
+    label: "ARC",
+    tier: 2,
+    solo: { splashAdd: 0.15 },
+    weight: 10,
+    detail: "+0.15 splash",
+  },
+  surge: {
+    mark: "SG",
+    label: "SURGE",
+    tier: 3,
+    solo: { damage: 0.04 },
+    weight: 7,
+    detail: "+4% damage",
+  },
+  kernel: {
+    mark: "KR",
+    label: "KERNEL",
+    tier: 3,
+    solo: { corePerWave: 0.4 },
+    weight: 7,
+    detail: "+0.4 core / wave",
+  },
+  nulls: {
+    mark: "NL",
+    label: "NULL",
+    tier: 3,
+    solo: { execute: 0.02 },
+    weight: 6,
+    detail: "Execute 2%",
+  },
+  apex: {
+    mark: "AX",
+    label: "APEX",
+    tier: 3,
+    solo: { fireRate: 0.04 },
+    weight: 6,
+    detail: "+4% fire rate",
+  },
+  prism: {
+    mark: "PR",
+    label: "PRISM",
+    tier: 4,
+    solo: { splashConvert: 0.05 },
+    weight: 3,
+    detail: "5% splash convert",
+  },
+  voids: {
+    mark: "VD",
+    label: "VOID",
+    tier: 4,
+    solo: { execute: 0.03 },
+    weight: 3,
+    detail: "Execute 3%",
+  },
+  sigma: {
+    mark: "SM",
+    label: "SIGMA",
+    tier: 4,
+    solo: { bounty: 0.08 },
+    weight: 2,
+    detail: "+8% bounty",
+  },
+  zenith: {
+    mark: "ZN",
+    label: "ZENITH",
+    tier: 4,
+    solo: { damage: 0.06 },
+    weight: 2,
+    detail: "+6% damage",
+  },
 };
 
 export type CipherDef = {
@@ -167,9 +276,8 @@ export function matchCipher(sockets: Array<GlyphId | null>): CipherDef | null {
   if (sockets.some((s) => s == null)) return null;
   const seq = sockets as GlyphId[];
   return (
-    CIPHERS.find(
-      (c) => c.recipe.length === seq.length && c.recipe.every((g, i) => g === seq[i]),
-    ) ?? null
+    CIPHERS.find((c) => c.recipe.length === seq.length && c.recipe.every((g, i) => g === seq[i])) ??
+    null
   );
 }
 
@@ -192,7 +300,10 @@ export function addPartial(a: CombatMods, b: Partial<CombatMods>): CombatMods {
   };
 }
 
-export function chassisMods(ch: ChassisInstance | null): { mods: CombatMods; cipher: CipherDef | null } {
+export function chassisMods(ch: ChassisInstance | null): {
+  mods: CombatMods;
+  cipher: CipherDef | null;
+} {
   const mods = emptyMods();
   if (!ch) return { mods, cipher: null };
   const word = matchCipher(ch.sockets);
@@ -251,7 +362,12 @@ export function spendGlyph(p: PlayerProfile, id: GlyphId): boolean {
   return true;
 }
 
-export function socketGlyph(p: PlayerProfile, chassisId: string, slot: number, glyph: GlyphId): boolean {
+export function socketGlyph(
+  p: PlayerProfile,
+  chassisId: string,
+  slot: number,
+  glyph: GlyphId,
+): boolean {
   const ch = p.chassis.find((c) => c.id === chassisId);
   if (!ch || slot < 0 || slot >= ch.sockets.length) return false;
   if (!spendGlyph(p, glyph)) return false;
@@ -282,7 +398,9 @@ export function recipeHint(c: CipherDef, discovered: boolean): string {
   return `${c.recipe.length}-socket · starts ${GLYPH[c.recipe[0]!].label}`;
 }
 
-export function prefixCipher(sockets: Array<GlyphId | null>): { cipher: CipherDef; have: number } | null {
+export function prefixCipher(
+  sockets: Array<GlyphId | null>,
+): { cipher: CipherDef; have: number } | null {
   let best: { cipher: CipherDef; have: number } | null = null;
   for (const c of CIPHERS) {
     if (c.recipe.length !== sockets.length) continue;

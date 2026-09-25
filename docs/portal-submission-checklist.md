@@ -47,7 +47,7 @@ that's a genuine failure and shouldn't be ignored.
   `screenshots/menu.png`, `screenshots/combat.png`, `screenshots/midwave.png`,
   `screenshots/placed.png`, `screenshots/skills.png`. Avoid the `qa-*.png`
   files — those are internal debug captures, not store-quality.
-- **Not yet produced:** Poki's *animated* thumbnail (1080×1080+, 4–6s loop,
+- **Not yet produced:** Poki's _animated_ thumbnail (1080×1080+, 4–6s loop,
   ≥50fps) and CrazyGames' three cover-image crops (1920×1080 landscape,
   800×1200 portrait, 800×800 square, no borders/logos per their guidelines).
   These are genuine design/video assets, not something to generate blind —

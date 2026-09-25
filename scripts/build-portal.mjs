@@ -36,7 +36,9 @@ const builtStaticSite = existsSync(indexPath) && existsSync(assetsDir);
 
 if (result.status !== 0) {
   if (!builtStaticSite) {
-    console.error("[build-portal] vite build failed before producing a static site — not a known/tolerated failure.");
+    console.error(
+      "[build-portal] vite build failed before producing a static site — not a known/tolerated failure.",
+    );
     process.exit(result.status ?? 1);
   }
   console.warn(
@@ -64,4 +66,6 @@ if (after === before && !before.includes(`/assets/${cssFile}`)) {
 }
 writeFileSync(indexPath, after);
 
-console.log(`[build-portal] OK — .output/public is ready to zip (index.html -> /assets/${cssFile}).`);
+console.log(
+  `[build-portal] OK — .output/public is ready to zip (index.html -> /assets/${cssFile}).`,
+);
